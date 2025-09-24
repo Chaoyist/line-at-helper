@@ -18,45 +18,114 @@ line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN) if CHANNEL_ACCESS_TOKEN else Non
 handler = WebhookHandler(CHANNEL_SECRET) if CHANNEL_SECRET else None
 
 # Google Sheets CSV 匯出連結 (僅讀，不會動到原始檔)
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/export?format=csv&gid=1842879320"
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/export?format=csv&gid=1265592706"  # 更新為正確的工作表 gid
 
-# ---- 讀取 Google Sheets 並整理昨日資料 ----
+# ---- 讀取 Google Sheets 並整理昨日資料（按固定儲存格） ----
+def _col_letters_to_idx(col_letters: str) -> int:
+    # A->0, B->1, ... Z->25, AA->26, ...
+    col_letters = col_letters.strip().upper()
+    n = 0
+    for ch in col_letters:
+        if not ('A' <= ch <= 'Z'):
+            raise ValueError(f"Invalid column letter: {col_letters}")
+        n = n * 26 + (ord(ch) - ord('A') + 1)
+    return n - 1
+
+def _read_cells_from_csv(url: str, refs: dict) -> dict:
+    """refs: {key: (col_letters, row_number)} → return {key: value_str}"""
+    import csv
+    resp = requests.get(url)
+    resp.raise_for_status()
+    rows = list(csv.reader(resp.text.splitlines()))
+    out = {}
+    for key, (col_letters, row_num) in refs.items():
+        r = int(row_num) - 1  # 1-based to 0-based
+        c = _col_letters_to_idx(col_letters)
+        try:
+            out[key] = rows[r][c].strip()
+        except Exception:
+            out[key] = "-"
+    return out
+
 def fetch_yesterday_summary():
     try:
-        # 計算昨日日期 (假設今天 2025/09/24 → 昨日 2025/09/23)
         today = datetime.date.today()
         yesterday = today - datetime.timedelta(days=1)
         target_date = yesterday.strftime("%Y/%m/%d")
 
-        # 下載 CSV 內容
-        resp = requests.get(SHEET_CSV_URL)
-        resp.raise_for_status()
-        lines = resp.text.splitlines()
+        refs = {
+            "kinmen_flights": ("CP", 8),
+            "kinmen_seats": ("CQ", 8),
+            "kinmen_pax": ("CR", 8),
+            "kinmen_load": ("CS", 8),
 
-        # 假設表格格式：日期, 航線, 架次, 座位數, 載客數, 載客率
-        import csv
-        reader = csv.DictReader(lines)
+            "penghu_flights": ("CP", 13),
+            "penghu_seats": ("CQ", 13),
+            "penghu_pax": ("CR", 13),
+            "penghu_load": ("CS", 13),
 
-        summary_texts = []
-        for row in reader:
-            if row.get("日期") == target_date and "金門" in row.get("航線", ""):
-                summary_texts.append(
-                    f"\n金門航線：\n"
-                    f"✈️ 架次：{row.get('架次','-')}\n"
-                    f"💺 座位數：{row.get('座位數','-')}\n"
-                    f"👥 載客數：{row.get('載客數','-')}\n"
-                    f"📊 載客率：{row.get('載客率','-')}"
-                )
+            "matsu_flights": ("CP", 19),
+            "matsu_seats": ("CQ", 19),
+            "matsu_pax": ("CR", 19),
+            "matsu_load": ("CS", 19),
 
-        if summary_texts:
-            return f"昨日({target_date})國內線簡要統計" + "".join(summary_texts)
-        else:
-            return f"昨日({target_date})國內線簡要統計：查無資料"
+            "main_flights": ("CP", 24),
+            "main_seats": ("CQ", 24),
+            "main_pax": ("CR", 24),
+            "main_load": ("CS", 24),
+
+            "other_flights": ("CP", 31),
+            "other_seats": ("CQ", 31),
+            "other_pax": ("CR", 31),
+            "other_load": ("CS", 31),
+        }
+
+        cells = _read_cells_from_csv(SHEET_CSV_URL, refs)
+
+        parts = [f"昨日({target_date})國內線簡要統計"]
+        parts.append(
+            f"\n金門航線：\n"
+            f"✈️ 架次：{cells['kinmen_flights']}\n"
+            f"💺 座位數：{cells['kinmen_seats']}\n"
+            f"👥 載客數：{cells['kinmen_pax']}\n"
+            f"📊 載客率：{cells['kinmen_load']}"
+        )
+        parts.append(
+            f"\n澎湖航線：\n"
+            f"✈️ 架次：{cells['penghu_flights']}\n"
+            f"💺 座位數：{cells['penghu_seats']}\n"
+            f"👥 載客數：{cells['penghu_pax']}\n"
+            f"📊 載客率：{cells['penghu_load']}"
+        )
+        parts.append(
+            f"\n馬祖航線：\n"
+            f"✈️ 架次：{cells['matsu_flights']}\n"
+            f"💺 座位數：{cells['matsu_seats']}\n"
+            f"👥 載客數：{cells['matsu_pax']}\n"
+            f"📊 載客率：{cells['matsu_load']}"
+        )
+        parts.append(
+            f"\n本島航線：\n"
+            f"✈️ 架次：{cells['main_flights']}\n"
+            f"💺 座位數：{cells['main_seats']}\n"
+            f"👥 載客數：{cells['main_pax']}\n"
+            f"📊 載客率：{cells['main_load']}"
+        )
+        parts.append(
+            f"\n其他離島航線：\n"
+            f"✈️ 架次：{cells['other_flights']}\n"
+            f"💺 座位數：{cells['other_seats']}\n"
+            f"👥 載客數：{cells['other_pax']}\n"
+            f"📊 載客率：{cells['other_load']}"
+        )
+
+        return "\n".join(parts)
 
     except Exception as e:
         return f"無法讀取昨日統計資料：{e}"
 
 # ---- LINE Webhook ----
+
 @app.route("/callback", methods=["POST"])
 def callback():
     if not handler:
