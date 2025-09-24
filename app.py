@@ -1,6 +1,6 @@
 # app.py
-# 簡易 LINE Bot：使用者輸入「昨日航班統計」或「今日航班預估」→ 回覆假的 Excel 下載網址
-# 加入健康檢查端點：/healthz（存活）、/readyz（就緒，檢查必要環境變數）、/version（版本與執行狀態）
+# LINE Bot：使用者輸入「七日內國內線統計報表」→ 回覆指定的 Google Sheets 連結
+# 保留健康檢查與版本端點方便 Cloud Run / K8s 使用
 
 import os
 import time
@@ -16,7 +16,6 @@ from linebot.models import (
 )
 
 app = Flask(__name__)
-# 基本日誌設定（Cloud Run 會收集 stdout）
 logging.basicConfig(level=logging.INFO)
 logger = app.logger
 
@@ -46,12 +45,12 @@ def base_health_payload(status: str):
     }
 
 # ---- 健康檢查端點 ----
-@app.route("/healthz", methods=["GET"])  # liveness：存活檢查（輕量、永遠應回 200）
+@app.route("/healthz", methods=["GET"])
 def healthz():
     payload = base_health_payload("ok")
     return jsonify(payload), 200
 
-@app.route("/readyz", methods=["GET"])  # readiness：就緒檢查（檢查必要設定是否到位）
+@app.route("/readyz", methods=["GET"])
 def readyz():
     checks = {
         "env.LINE_CHANNEL_SECRET": bool(CHANNEL_SECRET),
@@ -59,12 +58,10 @@ def readyz():
     }
     is_ready = all(checks.values())
     payload = base_health_payload("ok" if is_ready else "fail")
-    payload.update({
-        "checks": checks
-    })
+    payload.update({"checks": checks})
     return jsonify(payload), 200 if is_ready else 503
 
-@app.route("/version", methods=["GET"])  # 提供版本與基本狀態給監控或除錯
+@app.route("/version", methods=["GET"])
 def version():
     return jsonify(base_health_payload("ok")), 200
 
@@ -89,43 +86,31 @@ def callback():
     return "OK"
 
 # ---- 訊息處理 ----
-if handler:  # 僅在 handler 存在時註冊事件處理，避免啟動期例外
+if handler:
     @handler.add(MessageEvent, message=TextMessage)
     def handle_message(event: MessageEvent):
         text = (event.message.text or "").strip()
         logger.info("Received message: %r", text)
 
-        if text == "昨日航班統計":
-            url = "https://example.com/demo/yesterday_flight_summary.xlsx"
-            msg = f"✅ 這是展示連結（假的）：\n{url}"
+        if text == "七日內國內線統計報表":
+            url = "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"
+            msg = f"📈 七日內國內線統計報表：\n{url}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
-            logger.info("Replied with yesterday link")
+            logger.info("Replied with 7-day domestic link")
             return
 
-        if text == "今日航班預估":
-            url = "https://example.com/demo/today_flight_forecast.xlsx"
-            msg = f"✅ 這是展示連結（假的）：\n{url}"
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
-            logger.info("Replied with today link")
-            return
-
-        # 其他輸入 → 提示訊息
-        tip = "請輸入「昨日航班統計」或「今日航班預估」🙂"
+        tip = "請輸入「七日內國內線統計報表」🙂"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=tip))
         logger.info("Replied with tip")
 
-# ---- 選用：根路由回應 ----
-@app.route("/", methods=["GET"])  # 方便人工快速確認服務有回應
+# ---- 根路由與模擬測試 ----
+@app.route("/", methods=["GET"])
 def index():
-    return (
-        "Flight Bot online. Try /healthz /readyz /version /simulate?q=昨日航班統計", 200
-    )
+    return ("Flight Bot online. Try /healthz /readyz /version /simulate?q=七日內國內線統計報表", 200)
 
-@app.route("/simulate", methods=["GET"])  # 不走 LINE 簽章，單純模擬文字輸入方便排錯
+@app.route("/simulate", methods=["GET"])
 def simulate():
     q = (request.args.get("q") or "").strip()
-    if q == "昨日航班統計":
-        return jsonify({"reply": "✅ 這是展示連結（假的）：https://example.com/demo/yesterday_flight_summary.xlsx"}), 200
-    if q == "今日航班預估":
-        return jsonify({"reply": "✅ 這是展示連結（假的）：https://example.com/demo/today_flight_forecast.xlsx"}), 200
-    return jsonify({"reply": "請輸入「昨日航班統計」或「今日航班預估」🙂"}), 200
+    if q == "七日內國內線統計報表":
+        return jsonify({"reply": "📈 七日內國內線統計報表：https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"}), 200
+    return jsonify({"reply": "請輸入「七日內國內線統計報表」🙂"}), 200
