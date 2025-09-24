@@ -18,7 +18,7 @@ line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN) if CHANNEL_ACCESS_TOKEN else Non
 handler = WebhookHandler(CHANNEL_SECRET) if CHANNEL_SECRET else None
 
 # Google Sheets CSV 匯出連結 (僅讀，不會動到原始檔)
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/export?format=csv&gid=1265592706"  # 更新為正確的工作表 gid
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/pub?gid=74488037&single=true&output=csv"  # 更新為你提供的工作表 gid=74488037  # 建議使用『發佈到網路』的公開 CSV 端點，較穩定  # 更新為正確的工作表 gid
 
 # ---- 讀取 Google Sheets 並整理昨日資料（按固定儲存格） ----
 def _col_letters_to_idx(col_letters: str) -> int:
@@ -32,11 +32,39 @@ def _col_letters_to_idx(col_letters: str) -> int:
     return n - 1
 
 def _read_cells_from_csv(url: str, refs: dict) -> dict:
-    """refs: {key: (col_letters, row_number)} → return {key: value_str}"""
+    """refs: {key: (col_letters, row_number)} → return {key: value_str}
+    會自動嘗試多種 CSV 端點，避免 400/403 問題。
+    """
     import csv
-    resp = requests.get(url)
-    resp.raise_for_status()
-    rows = list(csv.reader(resp.text.splitlines()))
+    urls = [
+        # 1) 發佈到網路（建議）：File → Share → Publish to web
+        f"https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/pub?gid=74488037&single=true&output=csv",
+        # 2) 匯出端點（需檔案對外可檢視）：
+        f"https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/export?format=csv&gid=74488037",
+        # 3) gviz 查詢端點（公開可檢視即可）：
+        f"https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/gviz/tq?tqx=out:csv&gid=74488037",
+    ]
+
+    last_err = None
+    text = None
+    for u in urls:
+        try:
+            resp = requests.get(u, headers={"User-Agent": "Mozilla/5.0"}, timeout=20, allow_redirects=True)
+            resp.raise_for_status()
+            # 有些情況會回 HTML（未公開或權限不足），簡單檢查一下
+            if resp.text.strip().startswith("<!DOCTYPE html"):
+                last_err = Exception("Got HTML instead of CSV (likely permission not public)")
+                continue
+            text = resp.text
+            break
+        except Exception as e:
+            last_err = e
+            continue
+
+    if text is None:
+        raise last_err or Exception("Failed to fetch CSV")
+
+    rows = list(csv.reader(text.splitlines()))
     out = {}
     for key, (col_letters, row_num) in refs.items():
         r = int(row_num) - 1  # 1-based to 0-based
