@@ -97,16 +97,14 @@ if handler:  # 僅在 handler 存在時註冊事件處理，避免啟動期例�
 
         if text == "昨日航班統計":
             url = "https://example.com/demo/yesterday_flight_summary.xlsx"
-            msg = f"✅ 這是展示連結（假的）：
-{url}"
+            msg = f"✅ 這是展示連結（假的）：\n{url}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             logger.info("Replied with yesterday link")
             return
 
         if text == "今日航班預估":
             url = "https://example.com/demo/today_flight_forecast.xlsx"
-            msg = f"✅ 這是展示連結（假的）：
-{url}"
+            msg = f"✅ 這是展示連結（假的）：\n{url}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             logger.info("Replied with today link")
             return
