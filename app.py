@@ -87,10 +87,10 @@ def fetch_yesterday_summary():
             "kinmen_pax": ("CR", 8),
             "kinmen_load": ("CS", 8),
 
-            "penghu_flights": ("CP", 13),
-            "penghu_seats": ("CQ", 13),
-            "penghu_pax": ("CR", 13),
-            "penghu_load": ("CS", 13),
+            "penghu_flights": ("CP", 14),
+            "penghu_seats": ("CQ", 14),
+            "penghu_pax": ("CR", 14),
+            "penghu_load": ("CS", 14),
 
             "matsu_flights": ("CP", 19),
             "matsu_seats": ("CQ", 19),
