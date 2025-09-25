@@ -1,5 +1,7 @@
 # app.py
-# LINE Bot：使用者輸入「七日內國內線統計報表」→ 回覆指定的短網址
+# LINE Bot：
+# 使用者輸入「7日內國內線統計表」→ 回覆指定的短網址
+# 使用者輸入「當日疏運統計表」→ 回覆指定的短網址
 
 import os
 from flask import Flask, request, abort
@@ -35,13 +37,19 @@ if handler:
     def handle_message(event: MessageEvent):
         text = (event.message.text or "").strip()
 
-        if text == "七日內國內線統計報表":
+        if text == "7日內國內線統計表":
             url = "https://reurl.cc/Lnrjdy"
-            msg = f"📈 七日內國內線統計報表：\n{url}"
+            msg = f"📈 7日內國內線統計表：\n{url}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
 
-        tip = "請輸入「七日內國內線統計報表」🙂"
+        if text == "當日疏運統計表":
+            url = "https://reurl.cc/9nNEAO"
+            msg = f"📊 當日疏運統計表：\n{url}"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+            return
+
+        tip = "請輸入「7日內國內線統計表」或「當日疏運統計表」🙂"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=tip))
 
 # ---- 根路由 ----
