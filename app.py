@@ -249,12 +249,12 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
 
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
-                    {"type": "text", "text": f"{s_flown} ({flown_pct}%)", "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end", "flex": 3}
+                    {"type": "text", "text": f"{s_flown} ({{size: 'sm'}}{flown_pct}%)", "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end", "flex": 3}
                 ]},
 
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
-                    {"type": "text", "text": f"{s_cancelled} ({cancel_pct}%)", "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end", "flex": 3}
+                    {"type": "text", "text": f"{s_cancelled} ({{size: 'sm'}}{cancel_pct}%)", "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end", "flex": 3}
                 ]},
 
                 {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
