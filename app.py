@@ -203,8 +203,8 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
     - 標題：國內線當日運量統計
     - 副標：YYYY/MM/DD摘要
     - 本日預計架次（黑色大字，與下方對齊）
-    - 已飛架次（綠色大字，括號顯示百分比，同一行）
-    - 取消架次（紅色大字，括號顯示百分比，同一行）
+    - 已飛架次（綠色大字，括號小字百分比，同一行）
+    - 取消架次（紅色大字，括號小字百分比，同一行）
     - 下方：開啟報表連結按鈕
     """
     def to_int(x):
@@ -242,19 +242,28 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                 {"type": "text", "text": f"{date_str}摘要", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
 
+                # 本日預計架次（右側大字黑）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "本日預計架次", "size": "sm", "color": "#333333", "flex": 2},
                     {"type": "text", "text": str(s_scheduled), "size": "xxl", "weight": "bold", "align": "end", "flex": 3, "color": "#111111"}
                 ]},
 
+                # 已飛架次（右側大字 + 括號小字百分比，不換行）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
-                    {"type": "text", "text": f"{s_flown} ({{size: 'sm'}}{flown_pct}%)", "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end", "flex": 3}
+                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                        {"type": "text", "text": str(s_flown), "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
+                        {"type": "text", "text": f"({flown_pct}%)", "size": "sm", "color": "#2E7D32", "margin": "sm"}
+                    ]}
                 ]},
 
+                # 取消架次（右側大字 + 括號小字百分比，不換行）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
-                    {"type": "text", "text": f"{s_cancelled} ({{size: 'sm'}}{cancel_pct}%)", "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end", "flex": 3}
+                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                        {"type": "text", "text": str(s_cancelled), "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end"},
+                        {"type": "text", "text": f"({cancel_pct}%)", "size": "sm", "color": "#C62828", "margin": "sm"}
+                    ]}
                 ]},
 
                 {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
