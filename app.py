@@ -1,7 +1,7 @@
 # app.py
 # LINE Bot：
 # - 使用者輸入「7日內國內線統計表」：回覆短網址 + 摘要（來源：Google Sheets gviz CSV）。
-# - 使用者輸入「當日疏運統計表」：回覆短網址 + 本日三項統計（來源：Google Sheets gviz CSV）。
+# - 使用者輸入「國內線當日運量統計」：回覆短網址 + 本日三項統計（來源：Google Sheets gviz CSV）。：回覆短網址 + 本日三項統計（來源：Google Sheets gviz CSV）。
 #
 # 統一：
 # 1) 以 gviz CSV 端點存取（免 OAuth，前提是表單已設「知道連結的人可檢視」）。
@@ -199,12 +199,12 @@ def fetch_daily_transport_summary() -> Tuple[str, str, str]:
 
 def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: str, url: str) -> FlexSendMessage:
     """
-    當日疏運主KPI（數字版）：
-    - 標題：當日疏運統計表
-    - 副標：摘要（YYYY/MM/DD）
-    - 本日預計架次（灰字）
-    - 已飛架次（綠色大字，附百分比）
-    - 取消架次（紅色大字，附百分比）
+    國內線當日運量統計（數字版）：
+    - 標題：國內線當日運量統計
+    - 副標：YYYY/MM/DD摘要
+    - 本日預計架次（黑色大字）
+    - 已飛架次（綠色大字，右側同一行顯示百分比）
+    - 取消架次（紅色大字，右側同一行顯示百分比）
     - 下方：開啟報表連結按鈕
     """
     def to_int(x):
@@ -238,30 +238,30 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
             "layout": "vertical",
             "spacing": "md",
             "contents": [
-                {"type": "text", "text": "當日疏運統計表", "weight": "bold", "size": "lg"},
-                {"type": "text", "text": f"摘要（{date_str}）", "size": "sm", "color": "#888888"},
+                {"type": "text", "text": "國內線當日運量統計", "weight": "bold", "size": "lg"},
+                {"type": "text", "text": f"{date_str}摘要", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
 
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "本日預計架次", "size": "sm", "color": "#666666", "flex": 2},
-                    {"type": "text", "text": str(s_scheduled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
+                    {"type": "text", "text": "本日預計架次", "size": "sm", "color": "#333333", "flex": 2},
+                    {"type": "text", "text": str(s_scheduled), "size": "xl", "weight": "bold", "align": "end", "flex": 3, "color": "#111111"}
                 ]},
 
-                {"type": "box", "layout": "horizontal", "contents": [
+                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
-                    {"type": "box", "layout": "vertical", "alignItems": "flex-end", "flex": 3, "contents": [
-                        {"type": "text", "text": str(s_flown), "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
-                        {"type": "text", "text": f"{flown_pct}%", "size": "xs", "color": "#2E7D32"}
-                    ]}
-                ], "margin": "md"},
+                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                        {"type": "text", "text": str(s_flown), "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end", "flex": 0},
+                        {"type": "text", "text": f" {flown_pct}%", "size": "sm", "color": "#2E7D32"}
+                    ], "justifyContent": "flex-end"}
+                ]},
 
-                {"type": "box", "layout": "horizontal", "contents": [
+                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
-                    {"type": "box", "layout": "vertical", "alignItems": "flex-end", "flex": 3, "contents": [
-                        {"type": "text", "text": str(s_cancelled), "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end"},
-                        {"type": "text", "text": f"{cancel_pct}%", "size": "xs", "color": "#C62828"}
-                    ]}
-                ], "margin": "md"},
+                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                        {"type": "text", "text": str(s_cancelled), "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end", "flex": 0},
+                        {"type": "text", "text": f" {cancel_pct}%", "size": "sm", "color": "#C62828"}
+                    ], "justifyContent": "flex-end"}
+                ]},
 
                 {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
             ]
@@ -269,7 +269,7 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
         "styles": {"body": {"backgroundColor": "#FFFFFF"}}
     }
 
-    return FlexSendMessage(alt_text=f"當日疏運統計表（{date_str}）", contents=bubble)
+    return FlexSendMessage(alt_text=f"國內線當日運量統計（{date_str}）", contents=bubble)
 
 # ---------------------------------
 # LINE Webhook / 路由
@@ -300,8 +300,8 @@ if handler:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
 
-        if text == "當日疏運統計表":
-            url = "https://reurl.cc/9nNEAO"
+        if text == "國內線當日運量統計":
+            url = "https://docs.google.com/spreadsheets/d/1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"
             scheduled, flown, cancelled = fetch_daily_transport_summary()
             today = today_str_tw()
             try:
@@ -310,9 +310,9 @@ if handler:
             except Exception as e:
                 # 失敗退回文字版，附上DEBUG訊息
                 msg = (
-                    f"📊 當日疏運統計表：{url}"
-                    f"摘要 ({today})"
-                    f"本日表定架次：{scheduled}"
+                    f"國內線當日運量統計{url}"
+                    f"{today}摘要"
+                    f"本日預計架次：{scheduled}"
                     f"已飛架次：{flown}"
                     f"取消架次：{cancelled}"
                     f"(DEBUG: {e})"
@@ -320,7 +320,7 @@ if handler:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
 
-        tip = "請輸入「7日內國內線統計表」或「當日疏運統計表」🙂"
+        tip = "請輸入「7日內國內線統計表」或「國內線當日運量統計」🙂"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=tip))
 
 # ---- 根路由（健康檢查） ----
