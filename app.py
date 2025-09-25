@@ -6,6 +6,7 @@
 import os
 import csv
 import requests
+import datetime
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -56,8 +57,15 @@ def fetch_summary_text() -> str:
             vals = [(r[j].strip() if j < len(r) and r[j] is not None else "-") for j in range(4)]
             return tuple(vals)
 
+        # 標題：昨日(YYYY/MM/DD)航班彙整摘要
+        y = datetime.date.today() - datetime.timedelta(days=1)
+        title = f"
+昨日({y.strftime('%Y/%m/%d')})航班彙整摘要"
+
         parts = []
-        parts.append("\n全航線：")
+        parts.append(title)
+        parts.append("
+全航線：")
         cp, cq, cr, cs = get_values(ROW_MAP["全航線"])
         parts.append(f"✈️ 架次：{cp}")
         parts.append(f"💺 座位數：{cq}")
@@ -99,7 +107,7 @@ if handler:
         if text == "7日內國內線統計表":
             url = "https://reurl.cc/Lnrjdy"
             summary = fetch_summary_text()
-            msg = f"📈 7日內國內線統計表：{url}{summary and ('' + summary)}"
+            msg = f"📈 7日內國內線統計表：\n{url}{summary and ('' + summary)}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
 
