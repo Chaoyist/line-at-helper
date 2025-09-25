@@ -46,7 +46,7 @@ def date_pack_for_ui() -> Dict[str, str]:
     return {
         "today": today.strftime("%Y/%m/%d"),
         "yesterday": (today - datetime.timedelta(days=1)).strftime("%Y/%m/%d"),
-        "start7": (today - datetime.timedelta(days=6)).strftime("%Y/%m/%d"),  # 含今天共 7 天
+        "start7": (today - datetime.timedelta(days=7)).strftime("%Y/%m/%d"),  # 不含今天共 7 天
     }
 
 
@@ -185,7 +185,7 @@ def bubble_cover(start: str, end: str) -> Dict[str, Any]:
                     "justifyContent": "center",
                     "alignItems": "center",
                     "contents": [
-                        {"type": "text", "text": "⬅️ 往左滑看昨日各航線摘要統計", "size": "xs", "color": "#666666"}
+                        {"type": "text", "text": "⬅️ 往左滑看昨日各航線摘要統計", "size": "xs", "color": "#666666", "alignItems": "center"}
                     ]
                 }
             ]
@@ -194,7 +194,7 @@ def bubble_cover(start: str, end: str) -> Dict[str, Any]:
 
 
 def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: str) -> Dict[str, Any]:
-    subtitle = f"昨日({ymd_yesterday})" if title == "各航線摘要統計" else f"昨日({ymd_yesterday})摘要統計"
+    subtitle = f"昨日({ymd_yesterday})" if title == "全航線摘要統計" else f"昨日({ymd_yesterday})摘要統計"
     return {
         "type": "bubble",
         "size": "mega",
