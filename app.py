@@ -178,10 +178,16 @@ def bubble_cover(start: str, end: str) -> Dict[str, Any]:
                 {"type": "button", "style": "link", "height": "sm",
                  "action": {"type": "uri", "label": "開啟報表",
                              "uri": "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"}},
-                {"type": "box", "layout": "baseline", "margin": "lg", "contents": [
-                    {"type": "text", "text": "往左滑看昨日各航線摘要統計", "size": "xs", "color": "#666666", "flex": 0},
-                    {"type": "text", "text": "⬅️", "size": "xs", "margin": "md", "flex": 0}
-                ]}
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "lg",
+                    "justifyContent": "center",
+                    "alignItems": "center",
+                    "contents": [
+                        {"type": "text", "text": "⬅️ 往左滑看昨日各航線摘要統計", "size": "xs", "color": "#666666"}
+                    ]
+                }
             ]
         }
     }
@@ -201,22 +207,10 @@ def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: 
                 {"type": "text", "text": subtitle, "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
                 {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": [
-                    {"type": "box", "layout": "baseline", "contents": [
-                        {"type": "text", "text": "✈️ 架次：", "size": "sm", "color": "#333333", "flex": 0},
-                        {"type": "text", "text": cp, "size": "md", "weight": "bold", "align": "end"}
-                    ]},
-                    {"type": "box", "layout": "baseline", "contents": [
-                        {"type": "text", "text": "💺 座位數：", "size": "sm", "color": "#333333", "flex": 0},
-                        {"type": "text", "text": cq, "size": "md", "weight": "bold", "align": "end"}
-                    ]},
-                    {"type": "box", "layout": "baseline", "contents": [
-                        {"type": "text", "text": "👥 載客數：", "size": "sm", "color": "#333333", "flex": 0},
-                        {"type": "text", "text": cr, "size": "md", "weight": "bold", "align": "end"}
-                    ]},
-                    {"type": "box", "layout": "baseline", "contents": [
-                        {"type": "text", "text": "📊 載客率：", "size": "sm", "color": "#333333", "flex": 0},
-                        {"type": "text", "text": cs, "size": "md", "weight": "bold", "align": "end"}
-                    ]}
+                    {"type": "text", "text": f"✈️ 架次：{cp}", "size": "md", "weight": "bold", "wrap": True},
+                    {"type": "text", "text": f"💺 座位數：{cq}", "size": "md", "weight": "bold", "wrap": True},
+                    {"type": "text", "text": f"👥 載客數：{cr}", "size": "md", "weight": "bold", "wrap": True},
+                    {"type": "text", "text": f"📊 載客率：{cs}", "size": "md", "weight": "bold", "wrap": True}
                 ]}
             ]
         }
