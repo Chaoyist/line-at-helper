@@ -326,19 +326,19 @@ if handler:
         if text == "當日疏運統計表":
             url = "https://reurl.cc/9nNEAO"
             scheduled, flown, cancelled = fetch_daily_transport_summary()
-            # 以台灣時區顯示今天日期
             today = today_str_tw()
             try:
                 flex = build_daily_kpi_flex(scheduled, flown, cancelled, today, url)
                 line_bot_api.reply_message(event.reply_token, flex)
-            except Exception:
-                # 失敗退回文字版
+            except Exception as e:
+                # 失敗退回文字版，附上DEBUG訊息
                 msg = (
-                    f"📊 當日疏運統計表：{url}"
-                    f"摘要 ({today})"
-                    f"本日表定架次：{scheduled}"
-                    f"已飛架次：{flown}"
-                    f"取消架次：{cancelled}"
+                    f"📊 當日疏運統計表：{url}\n"
+                    f"摘要 ({today})\n"
+                    f"本日表定架次：{scheduled}\n"
+                    f"已飛架次：{flown}\n"
+                    f"取消架次：{cancelled}\n"
+                    f"(DEBUG: {e})"
                 )
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
