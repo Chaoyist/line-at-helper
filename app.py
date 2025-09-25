@@ -17,7 +17,7 @@ from typing import List, Tuple
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, FlexSendMessage
 
 # 時區（Python 3.9+ 內建 zoneinfo），用於顯示台灣時間日期
 try:
@@ -180,6 +180,87 @@ def fetch_daily_transport_summary() -> Tuple[str, str, str]:
         return ("-", "-", "-")
 
 # ---------------------------------
+# Flex Message：主KPI卡（表定 / 已飛 / 取消）
+# ---------------------------------
+
+def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: str, url: str) -> FlexSendMessage:
+    """
+    產生「當日疏運主KPI」Flex 卡片：
+    - KPI：表定 / 已飛 / 取消
+    - 比例條：已飛/表定、取消/表定（表定條為滿格）
+    任何欄位若為 '-' 或無法轉數字，比例條以 0% 顯示。
+    """
+    def to_int(x):
+        try:
+            return int(str(x).replace(',', '').strip())
+        except Exception:
+            return None
+
+    sched_i = to_int(scheduled)
+    flown_i = to_int(flown)
+    canc_i  = to_int(cancelled)
+
+    def pct(n, d):
+        if n is None or d is None or d <= 0:
+            return 0
+        v = max(0, min(100, round(n * 100 / d)))
+        return v
+
+    flown_pct = pct(flown_i, sched_i)
+    cancel_pct = pct(canc_i, sched_i)
+
+    s_scheduled = scheduled if scheduled else "-"
+    s_flown     = flown if flown else "-"
+    s_cancelled = cancelled if cancelled else "-"
+
+    bubble = {
+        "type": "bubble",
+        "size": "mega",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "當日疏運統計表", "weight": "bold", "size": "lg"},
+                {"type": "text", "text": f"摘要（{date_str}）", "size": "sm", "color": "#888888"},
+                {"type": "separator", "margin": "md"},
+                {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": [
+                    {"type": "box", "layout": "horizontal", "contents": [
+                        {"type": "text", "text": "表定", "size": "sm", "color": "#666666", "flex": 2},
+                        {"type": "text", "text": str(s_scheduled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
+                    ]},
+                    {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
+                        {"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#E0E0E0",
+                         "contents": [{"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#BDBDBD", "width": "100%"}]}
+                    ]},
+
+                    {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
+                        {"type": "text", "text": "已飛", "size": "sm", "color": "#666666", "flex": 2},
+                        {"type": "text", "text": str(s_flown), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
+                    ]},
+                    {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
+                        {"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#E0E0E0",
+                         "contents": [{"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#4CAF50", "width": f"{flown_pct}%"}]}
+                    ]},
+
+                    {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
+                        {"type": "text", "text": "取消", "size": "sm", "color": "#666666", "flex": 2},
+                        {"type": "text", "text": str(s_cancelled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
+                    ]},
+                    {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
+                        {"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#E0E0E0",
+                         "contents": [{"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#F44336", "width": f"{cancel_pct}%"}]}
+                    ]}
+                ]},
+                {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
+            ]
+        },
+        "styles": {"body": {"backgroundColor": "#FFFFFF"}}
+    }
+
+    return FlexSendMessage(alt_text=f"當日疏運統計表（{date_str}）", contents=bubble)
+
+# ---------------------------------
 # LINE Webhook / 路由
 # ---------------------------------
 @app.route("/callback", methods=["POST"])
@@ -214,14 +295,19 @@ if handler:
             # 以台灣時區顯示今天日期
             now_tw = datetime.datetime.now(ZoneInfo("Asia/Taipei")) if ZoneInfo else datetime.datetime.now()
             today = now_tw.strftime("%Y/%m/%d")
-            msg = (
-                f"📊 當日疏運統計表：\n{url}"
-                f"\n摘要 ({today})"
-                f"\n本日表定架次：{scheduled}"
-                f"\n已飛架次：{flown}"
-                f"\n取消架次：{cancelled}"
-            )
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+            try:
+                flex = build_daily_kpi_flex(scheduled, flown, cancelled, today, url)
+                line_bot_api.reply_message(event.reply_token, flex)
+            except Exception:
+                # 失敗退回文字版
+                msg = (
+                    f"📊 當日疏運統計表：{url}"
+                    f"摘要 ({today})"
+                    f"本日表定架次：{scheduled}"
+                    f"已飛架次：{flown}"
+                    f"取消架次：{cancelled}"
+                )
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
 
         tip = "請輸入「7日內國內線統計表」或「當日疏運統計表」🙂"
