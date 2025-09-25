@@ -238,30 +238,30 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                 {"type": "text", "text": f"{date_str}摘要", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
 
-                # 本日預計架次（右側大字黑，baseline 對齊與其他兩項一致）
+                # 本日預計架次（右側大字黑；與下方兩項用同樣容器對齊）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "本日預計架次", "size": "sm", "color": "#333333", "flex": 2},
-                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                    {"type": "box", "layout": "vertical", "flex": 3, "contents": [
                         {"type": "text", "text": str(s_scheduled), "size": "xxl", "weight": "bold", "color": "#111111", "align": "end"}
-                    ]}
+                    ], "alignItems": "flex-end"}
                 ]},
 
-                # 已飛架次（右側大字 + 括號小字百分比，baseline 同列、右對齊）
+                # 已飛架次（右側大字，下一行顯示括號小字百分比；整體右對齊）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
-                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                    {"type": "box", "layout": "vertical", "flex": 3, "contents": [
                         {"type": "text", "text": str(s_flown), "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
-                        {"type": "text", "text": f"({flown_pct}%)", "size": "sm", "color": "#2E7D32", "margin": "sm"}
-                    ]}
+                        {"type": "text", "text": f"({flown_pct}%)", "size": "xs", "color": "#2E7D32", "align": "end"}
+                    ], "alignItems": "flex-end"}
                 ]},
 
-                # 取消架次（右側大字 + 括號小字百分比，baseline 同列、右對齊）
+                # 取消架次（右側大字，下一行顯示括號小字百分比；整體右對齊）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
-                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                    {"type": "box", "layout": "vertical", "flex": 3, "contents": [
                         {"type": "text", "text": str(s_cancelled), "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end"},
-                        {"type": "text", "text": f"({cancel_pct}%)", "size": "sm", "color": "#C62828", "margin": "sm"}
-                    ]}
+                        {"type": "text", "text": f"({cancel_pct}%)", "size": "xs", "color": "#C62828", "align": "end"}
+                    ], "alignItems": "flex-end"}
                 ]},
 
                 {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
