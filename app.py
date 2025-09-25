@@ -43,14 +43,14 @@ ROW_MAP = {
     "其他離島航線": 30,
 }
 
-# ---- 當日疏運統計表（國內線 A1:Z999）----
+# ---- 當日疏運統計表（國內線 D1:P38）----
 CSV_DAILY_URL = (
     "https://docs.google.com/spreadsheets/d/"
     "1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd"
-    "/gviz/tq?tqx=out:csv&sheet=%E5%9C%8B%E5%85%A7%E7%B7%9A&range=A1:Z999"
+    "/gviz/tq?tqx=out:csv&sheet=%E5%9C%8B%E5%85%A7%E7%B7%9A&range=D1:P38"
 )
 
-# A1 標記轉 0-based index，例如 'N14' -> (13, 13)
+# A1 標記轉 0-based index，例如 'M19' -> (18, 12)
 def _a1_to_index(a1: str) -> tuple[int, int]:
     a1 = a1.strip().upper()
     i = 0
@@ -79,7 +79,7 @@ def _get_a1(rows: list[list[str]], a1: str, default: str = "-") -> str:
 def fetch_daily_transport_summary() -> tuple[str, str, str]:
     """
     擷取「當日疏運統計表」摘要三值：
-    本日表定架次=N14、已飛架次=P34、取消架次=P28。
+    本日表定架次=M19、已飛架次=M34、取消架次=M28。
     任何錯誤一律以 '-' 回傳避免中斷。
     """
     try:
@@ -89,10 +89,10 @@ def fetch_daily_transport_summary() -> tuple[str, str, str]:
         if txt.startswith("<!DOCTYPE html"):
             raise RuntimeError("CSV endpoint returned HTML (check sharing settings)")
         rows = list(csv.reader(txt.splitlines()))
-        n14 = _get_a1(rows, "N14", "-")
-        p34 = _get_a1(rows, "P34", "-")
-        p28 = _get_a1(rows, "P28", "-")
-        return (n14, p34, p28)
+        scheduled = _get_a1(rows, "M19", "-")
+        flown = _get_a1(rows, "M34", "-")
+        cancelled = _get_a1(rows, "M28", "-")
+        return (scheduled, flown, cancelled)
     except Exception:
         return ("-", "-", "-")
 
@@ -170,7 +170,7 @@ if handler:
 
         if text == "當日疏運統計表":
             url = "https://reurl.cc/9nNEAO"
-            n14, p34, p28 = fetch_daily_transport_summary()
+            scheduled, flown, cancelled = fetch_daily_transport_summary()
             # 以台灣時區顯示今天日期
             if ZoneInfo:
                 today = datetime.datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d")
@@ -178,10 +178,10 @@ if handler:
                 today = datetime.datetime.now().strftime("%Y/%m/%d")
             msg = (
                 f"📊 當日疏運統計表：{url}"
-                f"摘要 ({today})"
-                f"本日表定架次：{n14}"
-                f"已飛架次：{p34}"
-                f"取消架次：{p28}"
+                f"\n摘要 ({today})"
+                f"\n本日表定架次：{scheduled}"
+                f"\n已飛架次：{flown}"
+                f"\n取消架次：{cancelled}"
             )
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
