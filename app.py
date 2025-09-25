@@ -1,12 +1,19 @@
 # app.py
 # LINE Bot：
-# 使用者輸入「7日內國內線統計表」→ 回覆指定的短網址，並附上摘要（由 Google Sheets gviz CSV 抓取）
-# 使用者輸入「當日疏運統計表」→ 回覆指定的短網址
+# - 使用者輸入「7日內國內線統計表」：回覆短網址 + 摘要（來源：Google Sheets gviz CSV）。
+# - 使用者輸入「當日疏運統計表」：回覆短網址 + 本日三項統計（來源：Google Sheets gviz CSV）。
+#
+# 統一：
+# 1) 以 gviz CSV 端點存取（免 OAuth，前提是表單已設「知道連結的人可檢視」）。
+# 2) 以通用 fetch_gviz_csv(url) 取回二維陣列 rows。
+# 3) 以 get_a1(rows, "M19") 讀取 A1 位置；以 get_row_values(rows, row_1_based, n) 讀整列前 n 欄。
+# 4) 清楚命名與註解，便於後續維護與擴充。
 
 import os
 import csv
 import requests
 import datetime
+from typing import List, Tuple
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -18,6 +25,9 @@ try:
 except Exception:
     ZoneInfo = None
 
+# ---------------------------------
+# Flask / LINE 基本設定
+# ---------------------------------
 app = Flask(__name__)
 
 CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
@@ -26,14 +36,19 @@ CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN) if CHANNEL_ACCESS_TOKEN else None
 handler = WebhookHandler(CHANNEL_SECRET) if CHANNEL_SECRET else None
 
-# ---- 資料來源（固定分頁名稱 + 範圍，避免 gid 飄移） ----
-FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
-CSV_URL = (
-    f"https://docs.google.com/spreadsheets/d/{FILE_ID}/gviz/tq?"
+# ---------------------------------
+# Google Sheets gviz CSV 共同設定
+# ---------------------------------
+HTTP_HEADERS = {"User-Agent": "Mozilla/5.0 (FlightBot)"}
+HTTP_TIMEOUT = 20
+
+# ---- 7日內國內線統計表（固定分頁 + 範圍）----
+WEEKLY_FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
+WEEKLY_CSV_URL = (
+    f"https://docs.google.com/spreadsheets/d/{WEEKLY_FILE_ID}/gviz/tq?"
     "tqx=out:csv&sheet=%E7%B5%B1%E8%A8%881&range=CP2:CS32"
 )
-
-# 對應列（以你提供的 CSV 行號為準，1-based）
+# 對應列（1-based 索引，以你提供的行號）
 ROW_MAP = {
     "全航線": 31,
     "金門航線": 7,
@@ -42,24 +57,48 @@ ROW_MAP = {
     "本島航線": 23,
     "其他離島航線": 30,
 }
+ROUTE_LIST = ["金門航線", "澎湖航線", "馬祖航線", "本島航線", "其他離島航線"]
 
 # ---- 當日疏運統計表（國內線 D1:P38）----
-CSV_DAILY_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd"
-    "/gviz/tq?tqx=out:csv&sheet=%E5%9C%8B%E5%85%A7%E7%B7%9A&range=D1:P38"
+DAILY_FILE_ID = "1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd"
+DAILY_CSV_URL = (
+    f"https://docs.google.com/spreadsheets/d/{DAILY_FILE_ID}/gviz/tq?"
+    "tqx=out:csv&sheet=%E5%9C%8B%E5%85%A7%E7%B7%9A&range=D1:P38"
 )
+# 需要的 A1 位置
+CELL_SCHEDULED = "M19"  # 本日表定架次
+CELL_FLOWN = "M34"      # 已飛架次
+CELL_CANCELLED = "M28"  # 取消架次
 
-# A1 標記轉 0-based index，例如 'M19' -> (18, 12)
-def _a1_to_index(a1: str) -> tuple[int, int]:
-    a1 = a1.strip().upper()
+# ---------------------------------
+# 通用：下載 gviz CSV 並轉成 rows
+# ---------------------------------
+def fetch_gviz_csv(url: str) -> List[List[str]]:
+    """下載 gviz CSV（免 OAuth）。回傳二維陣列 rows。出錯拋例外。"""
+    resp = requests.get(url, headers=HTTP_HEADERS, timeout=HTTP_TIMEOUT)
+    resp.raise_for_status()
+    text = resp.text.strip()
+    # 若回 HTML 多半表示權限或重導（非 out:csv）
+    if text.startswith("<!DOCTYPE html"):
+        raise RuntimeError("CSV endpoint returned HTML – check sharing/publish settings")
+    rows = list(csv.reader(text.splitlines()))
+    return rows
+
+# ---------------------------------
+# A1 工具：將 A1 轉 (row_idx, col_idx) 以及從 rows 取值
+# ---------------------------------
+
+def a1_to_index(a1: str) -> Tuple[int, int]:
+    """A1 → 0-based (row_idx, col_idx)。例如 'M19' → (18, 12)。"""
+    s = a1.strip().upper()
     i = 0
-    while i < len(a1) and a1[i].isalpha():
+    while i < len(s) and s[i].isalpha():
         i += 1
-    col_letters = a1[:i]
-    row_digits = a1[i:]
+    col_letters = s[:i]
+    row_digits = s[i:]
     if not col_letters or not row_digits.isdigit():
         raise ValueError(f"Invalid A1: {a1}")
+    # 欄位：A=1 → Z=26 → AA=27 → ...
     col_num = 0
     for ch in col_letters:
         col_num = col_num * 26 + (ord(ch) - ord('A') + 1)
@@ -67,8 +106,8 @@ def _a1_to_index(a1: str) -> tuple[int, int]:
     row_idx = int(row_digits) - 1
     return (row_idx, col_idx)
 
-def _get_a1(rows: list[list[str]], a1: str, default: str = "-") -> str:
-    r, c = _a1_to_index(a1)
+def get_a1(rows: List[List[str]], a1: str, default: str = "-") -> str:
+    r, c = a1_to_index(a1)
     if r < 0 or r >= len(rows):
         return default
     row = rows[r]
@@ -76,61 +115,41 @@ def _get_a1(rows: list[list[str]], a1: str, default: str = "-") -> str:
         return default
     return (row[c] or "").strip() or default
 
-def fetch_daily_transport_summary() -> tuple[str, str, str]:
-    """
-    擷取「當日疏運統計表」摘要三值：
-    本日表定架次=M19、已飛架次=M34、取消架次=M28。
-    任何錯誤一律以 '-' 回傳避免中斷。
-    """
-    try:
-        resp = requests.get(CSV_DAILY_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        resp.raise_for_status()
-        txt = resp.text.strip()
-        if txt.startswith("<!DOCTYPE html"):
-            raise RuntimeError("CSV endpoint returned HTML (check sharing settings)")
-        rows = list(csv.reader(txt.splitlines()))
-        scheduled = _get_a1(rows, "M19", "-")
-        flown = _get_a1(rows, "M34", "-")
-        cancelled = _get_a1(rows, "M28", "-")
-        return (scheduled, flown, cancelled)
-    except Exception:
-        return ("-", "-", "-")
+# ---------------------------------
+# 功能一：7日內國內線統計表（回覆全航線 + 各航線四欄）
+# ---------------------------------
 
-def fetch_summary_text() -> str:
-    """抓取 CSV 並依固定列組成摘要文字。若失敗，回傳提示字串。"""
+def build_weekly_summary_text() -> str:
+    """抓取 WEEKLY_CSV_URL，組成多段摘要文字。若失敗回錯誤說明。"""
     try:
-        resp = requests.get(CSV_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        resp.raise_for_status()
-        # 簡單防呆：若回 HTML，多半是權限/重導
-        if resp.text.strip().startswith("<!DOCTYPE html"):
-            raise RuntimeError("CSV endpoint returned HTML (check sharing or publish settings)")
+        rows = fetch_gviz_csv(WEEKLY_CSV_URL)
 
-        rows = list(csv.reader(resp.text.splitlines()))
-        # CSV 欄序：CP, CQ, CR, CS → index 0..3
-        def get_values(row_1_based: int):
+        def get_row_values(row_1_based: int, n: int = 4) -> Tuple[str, ...]:
             i = row_1_based - 1
             if i < 0 or i >= len(rows):
-                return ("-", "-", "-", "-")
+                return tuple(["-"] * n)
             r = rows[i]
-            # 保護：欄位不足補 '-'
-            vals = [(r[j].strip() if j < len(r) and r[j] is not None else "-") for j in range(4)]
+            vals = []
+            for j in range(n):
+                vals.append((r[j].strip() if j < len(r) and r[j] is not None else "-"))
             return tuple(vals)
 
-        # 標題：昨日(YYYY/MM/DD)航班彙整摘要
-        y = datetime.date.today() - datetime.timedelta(days=1)
+        # 標題：昨日(YYYY/MM/DD)航班彙整摘要（台灣時間）
+        y = (datetime.datetime.now(ZoneInfo("Asia/Taipei")) if ZoneInfo else datetime.datetime.now()) - datetime.timedelta(days=1)
         title = f"\n\n昨日({y.strftime('%Y/%m/%d')})航班彙整摘要"
 
         parts = []
         parts.append(title)
+        # 全航線
+        cp, cq, cr, cs = get_row_values(ROW_MAP["全航線"])  # CP=架次 CQ=座位 CR=載客 CS=載客率
         parts.append("全航線：")
-        cp, cq, cr, cs = get_values(ROW_MAP["全航線"])
         parts.append(f"✈️ 架次：{cp}")
         parts.append(f"💺 座位數：{cq}")
         parts.append(f"👥 載客數：{cr}")
         parts.append(f"📊 載客率：{cs}")
-
-        for route in ["金門航線", "澎湖航線", "馬祖航線", "本島航線", "其他離島航線"]:
-            cp, cq, cr, cs = get_values(ROW_MAP[route])
+        # 各航線
+        for route in ROUTE_LIST:
+            cp, cq, cr, cs = get_row_values(ROW_MAP[route])
             parts.append(f"\n{route}：")
             parts.append(f"✈️ 架次：{cp}")
             parts.append(f"💺 座位數：{cq}")
@@ -141,7 +160,28 @@ def fetch_summary_text() -> str:
     except Exception as e:
         return f"（暫時無法取得統計資料：{e}）"
 
-# ---- LINE Webhook ----
+# ---------------------------------
+# 功能二：當日疏運統計表（三項 A1 欄位）
+# ---------------------------------
+
+def fetch_daily_transport_summary() -> Tuple[str, str, str]:
+    """
+    擷取「當日疏運統計表」摘要三值：
+    本日表定架次=M19、已飛架次=M34、取消架次=M28。
+    任何錯誤一律以 '-' 回傳避免中斷。
+    """
+    try:
+        rows = fetch_gviz_csv(DAILY_CSV_URL)
+        scheduled = get_a1(rows, CELL_SCHEDULED, "-")
+        flown = get_a1(rows, CELL_FLOWN, "-")
+        cancelled = get_a1(rows, CELL_CANCELLED, "-")
+        return (scheduled, flown, cancelled)
+    except Exception:
+        return ("-", "-", "-")
+
+# ---------------------------------
+# LINE Webhook / 路由
+# ---------------------------------
 @app.route("/callback", methods=["POST"])
 def callback():
     if not handler:
@@ -163,7 +203,7 @@ if handler:
 
         if text == "7日內國內線統計表":
             url = "https://reurl.cc/Lnrjdy"
-            summary = fetch_summary_text()
+            summary = build_weekly_summary_text()
             msg = f"📈 7日內國內線統計表：\n{url}{summary and ('' + summary)}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
@@ -172,14 +212,12 @@ if handler:
             url = "https://reurl.cc/9nNEAO"
             scheduled, flown, cancelled = fetch_daily_transport_summary()
             # 以台灣時區顯示今天日期
-            if ZoneInfo:
-                today = datetime.datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d")
-            else:
-                today = datetime.datetime.now().strftime("%Y/%m/%d")
+            now_tw = datetime.datetime.now(ZoneInfo("Asia/Taipei")) if ZoneInfo else datetime.datetime.now()
+            today = now_tw.strftime("%Y/%m/%d")
             msg = (
                 f"📊 當日疏運統計表：\n{url}"
                 f"\n摘要 ({today})"
-                f"\n本日預計架次：{scheduled}"
+                f"\n本日表定架次：{scheduled}"
                 f"\n已飛架次：{flown}"
                 f"\n取消架次：{cancelled}"
             )
@@ -189,7 +227,7 @@ if handler:
         tip = "請輸入「7日內國內線統計表」或「當日疏運統計表」🙂"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=tip))
 
-# ---- 根路由 ----
+# ---- 根路由（健康檢查） ----
 @app.route("/", methods=["GET"])
 def index():
     return ("Flight Bot online. POST to /callback with LINE events", 200)
