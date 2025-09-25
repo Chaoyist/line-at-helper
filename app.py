@@ -28,12 +28,12 @@ CSV_URL = (
 
 # 對應列（以你提供的 CSV 行號為準，1-based）
 ROW_MAP = {
-    "全航線": 30,
-    "金門航線": 6,
-    "澎湖航線": 12,
-    "馬祖航線": 17,
-    "本島航線": 22,
-    "其他離島航線": 29,
+    "全航線": 31,
+    "金門航線": 7,
+    "澎湖航線": 13,
+    "馬祖航線": 18,
+    "本島航線": 23,
+    "其他離島航線": 30,
 }
 
 def fetch_summary_text() -> str:
@@ -57,7 +57,7 @@ def fetch_summary_text() -> str:
             return tuple(vals)
 
         parts = []
-        parts.append("全航線：")
+        parts.append("\n全航線：")
         cp, cq, cr, cs = get_values(ROW_MAP["全航線"])
         parts.append(f"✈️ 架次：{cp}")
         parts.append(f"💺 座位數：{cq}")
@@ -66,7 +66,7 @@ def fetch_summary_text() -> str:
 
         for route in ["金門航線", "澎湖航線", "馬祖航線", "本島航線", "其他離島航線"]:
             cp, cq, cr, cs = get_values(ROW_MAP[route])
-            parts.append(f"{route}：")
+            parts.append(f"\n{route}：")
             parts.append(f"✈️ 架次：{cp}")
             parts.append(f"💺 座位數：{cq}")
             parts.append(f"👥 載客數：{cr}")
