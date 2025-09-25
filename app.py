@@ -12,6 +12,12 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
+# 時區（Python 3.9+ 內建 zoneinfo），用於顯示台灣時間日期
+try:
+    from zoneinfo import ZoneInfo  # Python 3.9+
+except Exception:
+    ZoneInfo = None
+
 app = Flask(__name__)
 
 CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
@@ -36,6 +42,59 @@ ROW_MAP = {
     "本島航線": 23,
     "其他離島航線": 30,
 }
+
+# ---- 當日疏運統計表（國內線 A1:Z999）----
+CSV_DAILY_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd"
+    "/gviz/tq?tqx=out:csv&sheet=%E5%9C%8B%E5%85%A7%E7%B7%9A&range=A1:Z999"
+)
+
+# A1 標記轉 0-based index，例如 'N14' -> (13, 13)
+def _a1_to_index(a1: str) -> tuple[int, int]:
+    a1 = a1.strip().upper()
+    i = 0
+    while i < len(a1) and a1[i].isalpha():
+        i += 1
+    col_letters = a1[:i]
+    row_digits = a1[i:]
+    if not col_letters or not row_digits.isdigit():
+        raise ValueError(f"Invalid A1: {a1}")
+    col_num = 0
+    for ch in col_letters:
+        col_num = col_num * 26 + (ord(ch) - ord('A') + 1)
+    col_idx = col_num - 1
+    row_idx = int(row_digits) - 1
+    return (row_idx, col_idx)
+
+def _get_a1(rows: list[list[str]], a1: str, default: str = "-") -> str:
+    r, c = _a1_to_index(a1)
+    if r < 0 or r >= len(rows):
+        return default
+    row = rows[r]
+    if c < 0 or c >= len(row):
+        return default
+    return (row[c] or "").strip() or default
+
+def fetch_daily_transport_summary() -> tuple[str, str, str]:
+    """
+    擷取「當日疏運統計表」摘要三值：
+    本日表定架次=N14、已飛架次=P34、取消架次=P28。
+    任何錯誤一律以 '-' 回傳避免中斷。
+    """
+    try:
+        resp = requests.get(CSV_DAILY_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        resp.raise_for_status()
+        txt = resp.text.strip()
+        if txt.startswith("<!DOCTYPE html"):
+            raise RuntimeError("CSV endpoint returned HTML (check sharing settings)")
+        rows = list(csv.reader(txt.splitlines()))
+        n14 = _get_a1(rows, "N14", "-")
+        p34 = _get_a1(rows, "P34", "-")
+        p28 = _get_a1(rows, "P28", "-")
+        return (n14, p34, p28)
+    except Exception:
+        return ("-", "-", "-")
 
 def fetch_summary_text() -> str:
     """抓取 CSV 並依固定列組成摘要文字。若失敗，回傳提示字串。"""
@@ -111,7 +170,19 @@ if handler:
 
         if text == "當日疏運統計表":
             url = "https://reurl.cc/9nNEAO"
-            msg = f"📊 當日疏運統計表：\n{url}"
+            n14, p34, p28 = fetch_daily_transport_summary()
+            # 以台灣時區顯示今天日期
+            if ZoneInfo:
+                today = datetime.datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d")
+            else:
+                today = datetime.datetime.now().strftime("%Y/%m/%d")
+            msg = (
+                f"📊 當日疏運統計表：{url}"
+                f"摘要 ({today})"
+                f"本日表定架次：{n14}"
+                f"已飛架次：{p34}"
+                f"取消架次：{p28}"
+            )
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
             return
 
@@ -122,5 +193,3 @@ if handler:
 @app.route("/", methods=["GET"])
 def index():
     return ("Flight Bot online. POST to /callback with LINE events", 200)
-
-
