@@ -42,6 +42,16 @@ handler = WebhookHandler(CHANNEL_SECRET) if CHANNEL_SECRET else None
 HTTP_HEADERS = {"User-Agent": "Mozilla/5.0 (FlightBot)"}
 HTTP_TIMEOUT = 20
 
+# ---- 時間工具：取得台灣今天日期字串（有 zoneinfo 用之，無則安全退回）----
+def today_str_tw(fmt: str = "%Y/%m/%d") -> str:
+    try:
+        if ZoneInfo:
+            return datetime.datetime.now(ZoneInfo("Asia/Taipei")).strftime(fmt)
+    except Exception:
+        # 有些精簡映像沒有 tzdata，這裡安全退回系統時間
+        pass
+    return datetime.datetime.now().strftime(fmt)
+
 # ---- 7日內國內線統計表（固定分頁 + 範圍）----
 WEEKLY_FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
 WEEKLY_CSV_URL = (
@@ -135,7 +145,11 @@ def build_weekly_summary_text() -> str:
             return tuple(vals)
 
         # 標題：昨日(YYYY/MM/DD)航班彙整摘要（台灣時間）
-        y = (datetime.datetime.now(ZoneInfo("Asia/Taipei")) if ZoneInfo else datetime.datetime.now()) - datetime.timedelta(days=1)
+        # 以昨天日期呈現（使用共用工具，避免 tzdata 缺失崩潰）
+        try:
+            y = datetime.datetime.strptime(today_str_tw(), "%Y/%m/%d") - datetime.timedelta(days=1)
+        except Exception:
+            y = datetime.datetime.now() - datetime.timedelta(days=1)
         title = f"\n\n昨日({y.strftime('%Y/%m/%d')})航班彙整摘要"
 
         parts = []
@@ -298,8 +312,7 @@ if handler:
             url = "https://reurl.cc/9nNEAO"
             scheduled, flown, cancelled = fetch_daily_transport_summary()
             # 以台灣時區顯示今天日期
-            now_tw = datetime.datetime.now(ZoneInfo("Asia/Taipei")) if ZoneInfo else datetime.datetime.now()
-            today = now_tw.strftime("%Y/%m/%d")
+            today = today_str_tw()
             try:
                 flex = build_daily_kpi_flex(scheduled, flown, cancelled, today, url)
                 line_bot_api.reply_message(event.reply_token, flex)
