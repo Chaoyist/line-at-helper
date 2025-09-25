@@ -199,9 +199,13 @@ def fetch_daily_transport_summary() -> Tuple[str, str, str]:
 
 def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: str, url: str) -> FlexSendMessage:
     """
-    當日疏運主KPI（單一堆疊條）：
-    - 表定 = 已飛 + 取消
-    - 以 Flex 的 `flex` 權重做堆疊（避免使用不支援的百分比 width）。
+    當日疏運主KPI（數字版）：
+    - 標題：當日疏運統計表
+    - 副標：摘要（YYYY/MM/DD）
+    - 本日預計架次（灰字）
+    - 已飛架次（綠色大字，附百分比）
+    - 取消架次（紅色大字，附百分比）
+    - 下方：開啟報表連結按鈕
     """
     def to_int(x):
         try:
@@ -213,13 +217,6 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
     flown_i = to_int(flown)
     canc_i  = to_int(cancelled)
 
-    # 權重計算：使用實際數字作為 flex 權重；避免 0/None
-    fi = max(0, flown_i or 0)
-    ci = max(0, canc_i or 0)
-    # 若表定缺失但兩者有值，仍可正常顯示堆疊條
-    total = max(0, sched_i or (fi + ci))
-
-    # 百分比顯示（文字用）
     def pct(n, d):
         if n is None or d is None or d <= 0:
             return 0
@@ -227,29 +224,11 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
         return v
 
     flown_pct = pct(flown_i, sched_i)
-    cancel_pct = pct(cancelled, sched_i) if isinstance(cancelled, int) else pct(canc_i, sched_i)
+    cancel_pct = pct(canc_i, sched_i)
 
     s_scheduled = scheduled if scheduled else "-"
     s_flown     = flown if flown else "-"
     s_cancelled = cancelled if cancelled else "-"
-
-    # 為避免 flex=0 全無顯示，當 total=0 時給微小固定寬度灰底條
-    bar_contents = []
-    if fi > 0:
-        bar_contents.append({
-            "type": "box", "layout": "vertical", "height": "10px",
-            "backgroundColor": "#4CAF50", "cornerRadius": "4px", "flex": fi
-        })
-    if ci > 0:
-        bar_contents.append({
-            "type": "box", "layout": "vertical", "height": "10px",
-            "backgroundColor": "#F44336", "flex": ci
-        })
-    if not bar_contents:  # 兩者皆 0
-        bar_contents.append({
-            "type": "box", "layout": "vertical", "height": "10px",
-            "backgroundColor": "#BDBDBD", "width": "12px", "cornerRadius": "4px"
-        })
 
     bubble = {
         "type": "bubble",
@@ -264,27 +243,25 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                 {"type": "separator", "margin": "md"},
 
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "表定", "size": "sm", "color": "#666666", "flex": 2},
+                    {"type": "text", "text": "本日預計架次", "size": "sm", "color": "#666666", "flex": 2},
                     {"type": "text", "text": str(s_scheduled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
                 ]},
 
-                {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
-                    {"type": "box", "layout": "horizontal", "height": "10px", "backgroundColor": "#E0E0E0", "cornerRadius": "4px",
-                     "contents": bar_contents}
-                ]},
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
+                    {"type": "box", "layout": "vertical", "alignItems": "flex-end", "flex": 3, "contents": [
+                        {"type": "text", "text": str(s_flown), "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
+                        {"type": "text", "text": f"{flown_pct}%", "size": "xs", "color": "#2E7D32"}
+                    ]}
+                ], "margin": "md"},
 
-                {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [
-                    {"type": "box", "layout": "baseline", "contents": [
-                        {"type": "box", "width": "10px", "height": "10px", "backgroundColor": "#4CAF50", "cornerRadius": "2px"},
-                        {"type": "text", "text": "已飛", "size": "sm", "margin": "xs"},
-                        {"type": "text", "text": f"{s_flown} ({flown_pct}%)", "size": "sm", "color": "#666666", "margin": "sm"}
-                    ], "flex": 1},
-                    {"type": "box", "layout": "baseline", "contents": [
-                        {"type": "box", "width": "10px", "height": "10px", "backgroundColor": "#F44336", "cornerRadius": "2px"},
-                        {"type": "text", "text": "取消", "size": "sm", "margin": "xs"},
-                        {"type": "text", "text": f"{s_cancelled} ({cancel_pct}%)", "size": "sm", "color": "#666666", "margin": "sm"}
-                    ], "flex": 1}
-                ]},
+                {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
+                    {"type": "box", "layout": "vertical", "alignItems": "flex-end", "flex": 3, "contents": [
+                        {"type": "text", "text": str(s_cancelled), "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end"},
+                        {"type": "text", "text": f"{cancel_pct}%", "size": "xs", "color": "#C62828"}
+                    ]}
+                ], "margin": "md"},
 
                 {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
             ]
@@ -333,11 +310,11 @@ if handler:
             except Exception as e:
                 # 失敗退回文字版，附上DEBUG訊息
                 msg = (
-                    f"📊 當日疏運統計表：{url}\n"
-                    f"摘要 ({today})\n"
-                    f"本日表定架次：{scheduled}\n"
-                    f"已飛架次：{flown}\n"
-                    f"取消架次：{cancelled}\n"
+                    f"📊 當日疏運統計表：{url}"
+                    f"摘要 ({today})"
+                    f"本日表定架次：{scheduled}"
+                    f"已飛架次：{flown}"
+                    f"取消架次：{cancelled}"
                     f"(DEBUG: {e})"
                 )
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
