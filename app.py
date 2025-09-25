@@ -200,12 +200,8 @@ def fetch_daily_transport_summary() -> Tuple[str, str, str]:
 def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: str, url: str) -> FlexSendMessage:
     """
     國內線當日運量統計（數字版）：
-    - 標題：國內線當日運量統計
-    - 副標：YYYY/MM/DD摘要
-    - 本日預計架次（黑色大字，與下方對齊）
-    - 已飛架次（綠色大字，括號小字百分比，同一行）
-    - 取消架次（紅色大字，括號小字百分比，同一行）
-    - 下方：開啟報表連結按鈕
+    - 三個數字（本日預計/已飛/取消）右側對齊
+    - 已飛、取消：括號小字顯示百分比，與數字同列
     """
     def to_int(x):
         try:
@@ -248,16 +244,16 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                     {"type": "text", "text": str(s_scheduled), "size": "xxl", "weight": "bold", "align": "end", "flex": 3, "color": "#111111"}
                 ]},
 
-                # 已飛架次（右側大字 + 括號小字百分比，同列對齊）
+                # 已飛架次（右側大字 + 括號小字百分比，baseline 同列、右對齊）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
-                    {"type": "box", "layout": "horizontal", "flex": 3, "contents": [
+                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
                         {"type": "text", "text": str(s_flown), "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
-                        {"type": "text", "text": f"({flown_pct}%)", "size": "sm", "color": "#2E7D32", "align": "end", "margin": "sm"}
-                    ], "justifyContent": "flex-end"}
+                        {"type": "text", "text": f"({flown_pct}%)", "size": "sm", "color": "#2E7D32", "margin": "sm"}
+                    ]}
                 ]},
 
-                # 取消架次（右側大字 + 括號小字百分比，同列對齊）（右側大字 + 括號小字百分比，不換行）
+                # 取消架次（右側大字 + 括號小字百分比，baseline 同列、右對齊）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
                     {"type": "box", "layout": "baseline", "flex": 3, "contents": [
