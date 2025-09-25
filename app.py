@@ -248,16 +248,16 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                     {"type": "text", "text": str(s_scheduled), "size": "xxl", "weight": "bold", "align": "end", "flex": 3, "color": "#111111"}
                 ]},
 
-                # 已飛架次（右側大字 + 括號小字百分比，不換行）
+                # 已飛架次（右側大字 + 括號小字百分比，同列對齊）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
-                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                    {"type": "box", "layout": "horizontal", "flex": 3, "contents": [
                         {"type": "text", "text": str(s_flown), "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
-                        {"type": "text", "text": f"({flown_pct}%)", "size": "sm", "color": "#2E7D32", "margin": "sm"}
-                    ]}
+                        {"type": "text", "text": f"({flown_pct}%)", "size": "sm", "color": "#2E7D32", "align": "end", "margin": "sm"}
+                    ], "justifyContent": "flex-end"}
                 ]},
 
-                # 取消架次（右側大字 + 括號小字百分比，不換行）
+                # 取消架次（右側大字 + 括號小字百分比，同列對齊）（右側大字 + 括號小字百分比，不換行）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
                     {"type": "box", "layout": "baseline", "flex": 3, "contents": [
