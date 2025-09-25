@@ -59,13 +59,11 @@ def fetch_summary_text() -> str:
 
         # 標題：昨日(YYYY/MM/DD)航班彙整摘要
         y = datetime.date.today() - datetime.timedelta(days=1)
-        title = f"
-昨日({y.strftime('%Y/%m/%d')})航班彙整摘要"
+        title = f"昨日({y.strftime('%Y/%m/%d')})航班彙整摘要"
 
         parts = []
         parts.append(title)
-        parts.append("
-全航線：")
+        parts.append("全航線：")
         cp, cq, cr, cs = get_values(ROW_MAP["全航線"])
         parts.append(f"✈️ 架次：{cp}")
         parts.append(f"💺 座位數：{cq}")
@@ -124,3 +122,4 @@ if handler:
 @app.route("/", methods=["GET"])
 def index():
     return ("Flight Bot online. POST to /callback with LINE events", 200)
+
