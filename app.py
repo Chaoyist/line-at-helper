@@ -238,10 +238,12 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                 {"type": "text", "text": f"{date_str}摘要", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
 
-                # 本日預計架次（右側大字黑）
+                # 本日預計架次（右側大字黑，baseline 對齊與其他兩項一致）
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "本日預計架次", "size": "sm", "color": "#333333", "flex": 2},
-                    {"type": "text", "text": str(s_scheduled), "size": "xxl", "weight": "bold", "align": "end", "flex": 3, "color": "#111111"}
+                    {"type": "box", "layout": "baseline", "flex": 3, "contents": [
+                        {"type": "text", "text": str(s_scheduled), "size": "xxl", "weight": "bold", "color": "#111111", "align": "end"}
+                    ]}
                 ]},
 
                 # 已飛架次（右側大字 + 括號小字百分比，baseline 同列、右對齊）
