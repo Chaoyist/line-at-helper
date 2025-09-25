@@ -177,9 +177,9 @@ if handler:
             else:
                 today = datetime.datetime.now().strftime("%Y/%m/%d")
             msg = (
-                f"📊 當日疏運統計表：{url}"
+                f"📊 當日疏運統計表：\n{url}"
                 f"\n摘要 ({today})"
-                f"\n本日表定架次：{scheduled}"
+                f"\n本日預計架次：{scheduled}"
                 f"\n已飛架次：{flown}"
                 f"\n取消架次：{cancelled}"
             )
