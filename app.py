@@ -199,11 +199,9 @@ def fetch_daily_transport_summary() -> Tuple[str, str, str]:
 
 def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: str, url: str) -> FlexSendMessage:
     """
-    產生「當日疏運主KPI」Flex 卡片（A 方案：單一堆疊條）：
-    - 上方 KPI 顯示「表定 N」。
-    - 下方一條堆疊條：左綠=已飛，右紅=取消；合計不超過 100%。
-    - 條下方提供圖例與百分比/實際數字。
-    任何欄位若為 '-' 或無法轉數字，比例條以 0% 顯示。
+    當日疏運主KPI（單一堆疊條）：
+    - 表定 = 已飛 + 取消
+    - 以 Flex 的 `flex` 權重做堆疊（避免使用不支援的百分比 width）。
     """
     def to_int(x):
         try:
@@ -215,6 +213,13 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
     flown_i = to_int(flown)
     canc_i  = to_int(cancelled)
 
+    # 權重計算：使用實際數字作為 flex 權重；避免 0/None
+    fi = max(0, flown_i or 0)
+    ci = max(0, canc_i or 0)
+    # 若表定缺失但兩者有值，仍可正常顯示堆疊條
+    total = max(0, sched_i or (fi + ci))
+
+    # 百分比顯示（文字用）
     def pct(n, d):
         if n is None or d is None or d <= 0:
             return 0
@@ -222,14 +227,30 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
         return v
 
     flown_pct = pct(flown_i, sched_i)
-    cancel_pct = pct(canc_i, sched_i)
+    cancel_pct = pct(cancelled, sched_i) if isinstance(cancelled, int) else pct(canc_i, sched_i)
 
-    # 展示字串（保留原樣）
     s_scheduled = scheduled if scheduled else "-"
     s_flown     = flown if flown else "-"
     s_cancelled = cancelled if cancelled else "-"
 
-    # Flex 結構：表定 KPI + 單一堆疊條 + 圖例
+    # 為避免 flex=0 全無顯示，當 total=0 時給微小固定寬度灰底條
+    bar_contents = []
+    if fi > 0:
+        bar_contents.append({
+            "type": "box", "layout": "vertical", "height": "10px",
+            "backgroundColor": "#4CAF50", "cornerRadius": "4px", "flex": fi
+        })
+    if ci > 0:
+        bar_contents.append({
+            "type": "box", "layout": "vertical", "height": "10px",
+            "backgroundColor": "#F44336", "flex": ci
+        })
+    if not bar_contents:  # 兩者皆 0
+        bar_contents.append({
+            "type": "box", "layout": "vertical", "height": "10px",
+            "backgroundColor": "#BDBDBD", "width": "12px", "cornerRadius": "4px"
+        })
+
     bubble = {
         "type": "bubble",
         "size": "mega",
@@ -242,22 +263,16 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                 {"type": "text", "text": f"摘要（{date_str}）", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
 
-                # KPI：表定 N
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
                     {"type": "text", "text": "表定", "size": "sm", "color": "#666666", "flex": 2},
                     {"type": "text", "text": str(s_scheduled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
                 ]},
 
-                # 單一堆疊條：已飛(綠) + 取消(紅)
                 {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
                     {"type": "box", "layout": "horizontal", "height": "10px", "backgroundColor": "#E0E0E0", "cornerRadius": "4px",
-                     "contents": [
-                        {"type": "box", "layout": "vertical", "height": "10px", "backgroundColor": "#4CAF50", "width": f"{flown_pct}%", "cornerRadius": "4px"},
-                        {"type": "box", "layout": "vertical", "height": "10px", "backgroundColor": "#F44336", "width": f"{cancel_pct}%"}
-                     ]}
+                     "contents": bar_contents}
                 ]},
 
-                # 圖例 + 數值
                 {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [
                     {"type": "box", "layout": "baseline", "contents": [
                         {"type": "box", "width": "10px", "height": "10px", "backgroundColor": "#4CAF50", "cornerRadius": "2px"},
@@ -268,7 +283,7 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                         {"type": "box", "width": "10px", "height": "10px", "backgroundColor": "#F44336", "cornerRadius": "2px"},
                         {"type": "text", "text": "取消", "size": "sm", "margin": "xs"},
                         {"type": "text", "text": f"{s_cancelled} ({cancel_pct}%)", "size": "sm", "color": "#666666", "margin": "sm"}
-                    ], "flex": 1, "justifyContent": "flex-end"}
+                    ], "flex": 1}
                 ]},
 
                 {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
