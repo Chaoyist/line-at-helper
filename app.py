@@ -180,14 +180,15 @@ def fetch_daily_transport_summary() -> Tuple[str, str, str]:
         return ("-", "-", "-")
 
 # ---------------------------------
-# Flex Message：主KPI卡（表定 / 已飛 / 取消）
+# Flex Message：主KPI卡（堆疊條：已飛 + 取消 = 表定）
 # ---------------------------------
 
 def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: str, url: str) -> FlexSendMessage:
     """
-    產生「當日疏運主KPI」Flex 卡片：
-    - KPI：表定 / 已飛 / 取消
-    - 比例條：已飛/表定、取消/表定（表定條為滿格）
+    產生「當日疏運主KPI」Flex 卡片（A 方案：單一堆疊條）：
+    - 上方 KPI 顯示「表定 N」。
+    - 下方一條堆疊條：左綠=已飛，右紅=取消；合計不超過 100%。
+    - 條下方提供圖例與百分比/實際數字。
     任何欄位若為 '-' 或無法轉數字，比例條以 0% 顯示。
     """
     def to_int(x):
@@ -209,10 +210,12 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
     flown_pct = pct(flown_i, sched_i)
     cancel_pct = pct(canc_i, sched_i)
 
+    # 展示字串（保留原樣）
     s_scheduled = scheduled if scheduled else "-"
     s_flown     = flown if flown else "-"
     s_cancelled = cancelled if cancelled else "-"
 
+    # Flex 結構：表定 KPI + 單一堆疊條 + 圖例
     bubble = {
         "type": "bubble",
         "size": "mega",
@@ -224,34 +227,36 @@ def build_daily_kpi_flex(scheduled: str, flown: str, cancelled: str, date_str: s
                 {"type": "text", "text": "當日疏運統計表", "weight": "bold", "size": "lg"},
                 {"type": "text", "text": f"摘要（{date_str}）", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
-                {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": [
-                    {"type": "box", "layout": "horizontal", "contents": [
-                        {"type": "text", "text": "表定", "size": "sm", "color": "#666666", "flex": 2},
-                        {"type": "text", "text": str(s_scheduled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
-                    ]},
-                    {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
-                        {"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#E0E0E0",
-                         "contents": [{"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#BDBDBD", "width": "100%"}]}
-                    ]},
 
-                    {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                        {"type": "text", "text": "已飛", "size": "sm", "color": "#666666", "flex": 2},
-                        {"type": "text", "text": str(s_flown), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
-                    ]},
-                    {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
-                        {"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#E0E0E0",
-                         "contents": [{"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#4CAF50", "width": f"{flown_pct}%"}]}
-                    ]},
-
-                    {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                        {"type": "text", "text": "取消", "size": "sm", "color": "#666666", "flex": 2},
-                        {"type": "text", "text": str(s_cancelled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
-                    ]},
-                    {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
-                        {"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#E0E0E0",
-                         "contents": [{"type": "box", "layout": "vertical", "height": "6px", "backgroundColor": "#F44336", "width": f"{cancel_pct}%"}]}
-                    ]}
+                # KPI：表定 N
+                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
+                    {"type": "text", "text": "表定", "size": "sm", "color": "#666666", "flex": 2},
+                    {"type": "text", "text": str(s_scheduled), "size": "xl", "weight": "bold", "align": "end", "flex": 3}
                 ]},
+
+                # 單一堆疊條：已飛(綠) + 取消(紅)
+                {"type": "box", "layout": "vertical", "margin": "sm", "contents": [
+                    {"type": "box", "layout": "horizontal", "height": "10px", "backgroundColor": "#E0E0E0", "cornerRadius": "4px",
+                     "contents": [
+                        {"type": "box", "layout": "vertical", "height": "10px", "backgroundColor": "#4CAF50", "width": f"{flown_pct}%", "cornerRadius": "4px"},
+                        {"type": "box", "layout": "vertical", "height": "10px", "backgroundColor": "#F44336", "width": f"{cancel_pct}%"}
+                     ]}
+                ]},
+
+                # 圖例 + 數值
+                {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [
+                    {"type": "box", "layout": "baseline", "contents": [
+                        {"type": "box", "width": "10px", "height": "10px", "backgroundColor": "#4CAF50", "cornerRadius": "2px"},
+                        {"type": "text", "text": "已飛", "size": "sm", "margin": "xs"},
+                        {"type": "text", "text": f"{s_flown} ({flown_pct}%)", "size": "sm", "color": "#666666", "margin": "sm"}
+                    ], "flex": 1},
+                    {"type": "box", "layout": "baseline", "contents": [
+                        {"type": "box", "width": "10px", "height": "10px", "backgroundColor": "#F44336", "cornerRadius": "2px"},
+                        {"type": "text", "text": "取消", "size": "sm", "margin": "xs"},
+                        {"type": "text", "text": f"{s_cancelled} ({cancel_pct}%)", "size": "sm", "color": "#666666", "margin": "sm"}
+                    ], "flex": 1, "justifyContent": "flex-end"}
+                ]},
+
                 {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": url}, "margin": "md"}
             ]
         },
