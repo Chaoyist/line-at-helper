@@ -326,8 +326,22 @@ def build_daily_flex_message() -> FlexSendMessage:
 
 # =========================
 # 健康檢查（Cloud Run 健檢用）
-@app.get("/healthz")
+@app.route("/healthz", methods=["GET", "HEAD"])
 def healthz():
+    # Cloud Run 偶爾會用 HEAD 做健檢；一律回 200
+    if request.method == "HEAD":
+        return "", 200
+    return "ok", 200
+
+# 額外提供根路由與 ready 檢查，避免 404
+@app.route("/", methods=["GET"])
+def root():
+    return "ok", 200
+
+@app.route("/readyz", methods=["GET", "HEAD"])
+def readyz():
+    if request.method == "HEAD":
+        return "", 200
     return "ok", 200
 
 # LINE Webhook
