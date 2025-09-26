@@ -150,9 +150,15 @@ def extract_weekly(rows: List[List[str]]) -> Dict[str, Any]:
 
 
 def extract_daily(rows: List[List[str]]) -> Dict[str, Any]:
-    dates = date_pack_for_ui()
+    """
+    1) 日期：抓擷取後的 A1 前 10 個字元（YYYY-MM-DD）。
+    2) 其他數值：依固定儲存格（M19、M34、M28）。
+    備註：CSV 範圍保持 D1:P38，日期已在擷取後的 A1。
+    """
+    a1_raw = get_a1(rows, "A1", "-")
+    report_date = a1_raw[:10] if a1_raw and len(a1_raw) >= 10 else now_tw().strftime("%Y-%m-%d")
     return {
-        "date": dates["today"],
+        "date": report_date,
         "scheduled": get_a1(rows, CELL_SCHEDULED, "-"),
         "flown": get_a1(rows, CELL_FLOWN, "-"),
         "cancelled": get_a1(rows, CELL_CANCELLED, "-"),
@@ -341,3 +347,4 @@ if handler:
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
