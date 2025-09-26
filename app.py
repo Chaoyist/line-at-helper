@@ -393,20 +393,20 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
                 {"type": "text", "text": f"{data['date']}摘要", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "本日預計架次", "size": "sm", "color": "#333333", "flex": 2},
+                    {"type": "text", "text": "本日預計架次", "size": "lg", "color": "#333333", "flex": 2},
                     {"type": "box", "layout": "vertical", "flex": 3, "contents": [
                         {"type": "text", "text": str(data['scheduled'] or '-') , "size": "xxl", "weight": "bold", "color": "#111111", "align": "end"}
                     ], "alignItems": "flex-end"}
                 ]},
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "已飛架次", "size": "sm", "color": "#2E7D32", "flex": 2},
+                    {"type": "text", "text": "已飛架次", "size": "lg", "color": "#2E7D32", "flex": 2},
                     {"type": "box", "layout": "vertical", "flex": 3, "contents": [
                         {"type": "text", "text": str(data['flown'] or '-') , "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
                         {"type": "text", "text": f"({flown_pct}%)", "size": "xs", "color": "#2E7D32", "align": "end"}
                     ], "alignItems": "flex-end"}
                 ]},
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "取消架次", "size": "sm", "color": "#C62828", "flex": 2},
+                    {"type": "text", "text": "取消架次", "size": "lg", "color": "#C62828", "flex": 2},
                     {"type": "box", "layout": "vertical", "flex": 3, "contents": [
                         {"type": "text", "text": str(data['cancelled'] or '-') , "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end"},
                         {"type": "text", "text": f"({cancel_pct}%)", "size": "xs", "color": "#C62828", "align": "end"}
