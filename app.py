@@ -430,7 +430,7 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
             }
         })
 
-    return FlexSendMessage(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})
+    return FlexSendMessage(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})
 
 # =========================
 # Builder：把抽取與渲染串起來
