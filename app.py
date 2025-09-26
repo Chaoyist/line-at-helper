@@ -102,7 +102,7 @@ def get_a1(rows: List[List[str]], a1: str, default: str = "-") -> str:
     return (row[c] or "").strip() or default
 
 # =========================
-# 常數：Google Sheets 與對照
+# 常數：Google Sheets
 # =========================
 WEEKLY_FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
 WEEKLY_CSV_URL = (
@@ -111,17 +111,9 @@ WEEKLY_CSV_URL = (
 )
 
 WEEKLY_SHEET_URL = (
-    "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"
+    "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link"
 )
-# 列號為 1-based（你提供的 mapping）
-ROW_MAP = {
-    "各航線摘要統計": 31,  # 全航線彙總卡
-    "金門航線": 7,
-    "澎湖航線": 13,
-    "馬祖航線": 18,
-    "本島航線": 23,
-    "其他離島航線": 30,
-}
+
 ROUTE_ORDER = [
     "各航線摘要統計",
     "金門航線",
@@ -140,7 +132,7 @@ CELL_SCHEDULED = "M19"
 CELL_FLOWN = "M34"
 CELL_CANCELLED = "M28"
 DAILY_SHEET_URL = (
-    "https://docs.google.com/spreadsheets/d/1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"
+    "https://docs.google.com/spreadsheets/d/1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd/edit?usp=drive_link"
 )
 
 # --- Daily 路線對照（以「擷取後的 CSV A1 座標」為準）---
@@ -150,7 +142,7 @@ DAILY_CANCEL_MAP: Dict[str, str] = {
     "馬祖航線": "I28",
     "花蓮航線": "J28",
     "臺東航線": "K28",
-    "其他航線": "L28",
+    "其他離島航線": "L28",
 }
 
 DAILY_FLOWN_MAP: Dict[str, Tuple[str, str]] = {
@@ -159,43 +151,21 @@ DAILY_FLOWN_MAP: Dict[str, Tuple[str, str]] = {
     "馬祖航線": ("I34", "I19"),
     "花蓮航線": ("J34", "J19"),
     "臺東航線": ("K34", "K19"),
-    "其他航線": ("L34", "L19"),
+    "其他離島航線": ("L34", "L19"),
 }
 
 # =========================
-# 抽取器（Extractor）：只做資料萃取，回傳簡單 dict
+# 抽取器（Extractor）
 # =========================
 
 def extract_weekly(rows: List[List[str]]) -> Dict[str, Any]:
-    def row_vals(row_1_based: int) -> Tuple[str, str, str, str]:
-        i = row_1_based - 1
-        if i < 0 or i >= len(rows):
-            return ("-", "-", "-", "-")
-        r = rows[i]
-        get = lambda j: (r[j].strip() if j < len(r) and r[j] is not None else "-")
-        return (get(0), get(1), get(2), get(3))  # CP, CQ, CR, CS
-
-    dates = date_pack_for_ui()
-    data = {
-        "cover": {"start": dates["start7"], "end": dates["today"]},
-        "yesterday": dates["yesterday"],
-        "routes": []
-    }
-    for title in ROUTE_ORDER:
-        row_index = ROW_MAP[title]
-        cp, cq, cr, cs = row_vals(row_index)
-        data["routes"].append({
-            "title": title,
-            "cp": cp, "cq": cq, "cr": cr, "cs": cs,
-        })
-    return data
-  
-def weekly_apply_v2(rows: List[List[str]], data: Dict[str, Any]) -> Dict[str, Any]:
-    """套用新版 weekly 規格：
-    - 日期從 CG2（MM月DD日，=昨日）換算成 YYYY/MM/DD，並回推 7 日。
-    - 各卡資料來源欄位更新為指定的 A1（依序：架次、座位數、載客數、載客率）。
+    """
+    依『CSV 轉換後的 A1 座標』直接抓取：
+    - 封面日期：CG2（MM月DD日，=昨日）→ 自動補年份/處理跨年；顯示 end 與回推 7 日的 start。
+    - 各卡欄位：依照指定的 A1。
     """
     import re
+
     def _parse_mmdd_zh_to_date(mmdd_text: str) -> datetime.date:
         m = re.search(r"(\d{1,2})月(\d{1,2})日", mmdd_text or "")
         today = now_tw().date()
@@ -207,7 +177,6 @@ def weekly_apply_v2(rows: List[List[str]], data: Dict[str, Any]) -> Dict[str, An
             d = datetime.date(y, mm, dd)
         except Exception:
             return today - datetime.timedelta(days=1)
-        # 跨年處理：若推得日期晚於今天，表示實際是去年
         if d > today:
             d = datetime.date(y - 1, mm, dd)
         return d
@@ -215,39 +184,42 @@ def weekly_apply_v2(rows: List[List[str]], data: Dict[str, Any]) -> Dict[str, An
     def _fmt(d: datetime.date) -> str:
         return d.strftime("%Y/%m/%d")
 
-    # 1) 由 CG2 算日期區間
     cg2_text = get_a1(rows, "CG2", "")
     end_date = _parse_mmdd_zh_to_date(cg2_text)
     start_date = end_date - datetime.timedelta(days=7)
-    data["cover"] = {"start": _fmt(start_date), "end": _fmt(end_date)}
-    data["yesterday"] = _fmt(end_date)
 
-    # 2) 各卡資料來源欄位（依序：架次、座位數、載客數、載客率）
-    cell_map: Dict[str, Tuple[str, str, str, str]] = {
+    CELL_MAP: Dict[str, Tuple[str, str, str, str]] = {
         "各航線摘要統計": ("CO32", "CP32", "CQ32", "CR32"),
-        "金門航線": ("CO8", "CP8", "CQ8", "CR8"),
+        "金門航線": ("CO8",  "CP8",  "CQ8",  "CR8"),
         "澎湖航線": ("CO14", "CP14", "CQ14", "CR14"),
         "馬祖航線": ("CO19", "CP19", "CQ19", "CR19"),
         "本島航線": ("CO24", "CP24", "CQ24", "CR24"),
         "其他離島航線": ("CO31", "CP31", "CQ31", "CR31"),
     }
 
-    for r in data.get("routes", []):
-        title = r.get("title", "")
-        if title in cell_map:
-            c1, c2, c3, c4 = cell_map[title]
-            r["cp"] = get_a1(rows, c1, r.get("cp", "-"))
-            r["cq"] = get_a1(rows, c2, r.get("cq", "-"))
-            r["cr"] = get_a1(rows, c3, r.get("cr", "-"))
-            r["cs"] = get_a1(rows, c4, r.get("cs", "-"))
-    return data
+    routes: List[Dict[str, Any]] = []
+    for title in ROUTE_ORDER:
+        c1, c2, c3, c4 = CELL_MAP[title]
+        routes.append({
+            "title": title,
+            "cp": get_a1(rows, c1, "-"),
+            "cq": get_a1(rows, c2, "-"),
+            "cr": get_a1(rows, c3, "-"),
+            "cs": get_a1(rows, c4, "-"),
+        })
+
+    return {
+        "cover": {"start": _fmt(start_date), "end": _fmt(end_date)},
+        "yesterday": _fmt(end_date),
+        "routes": routes,
+    }
+
 
 def extract_daily(rows: List[List[str]]) -> Dict[str, Any]:
     """
     1) 日期：抓擷取後的 A1 前 10 個字元（YYYY-MM-DD）。
     2) 其他數值：依固定儲存格（M19、M34、M28）。
-    3) 新增：路線別取消摘要（C/F/I/J/K/L28），與路線別已飛摘要（34 與 19 列）。
-    備註：CSV 範圍保持 D1:P38，日期已在擷取後的 A1。
+    3) 新增：路線別取消摘要與已飛摘要。
     """
     def _to_int(x: str) -> int:
         try:
@@ -258,14 +230,12 @@ def extract_daily(rows: List[List[str]]) -> Dict[str, Any]:
     a1_raw = get_a1(rows, "A1", "-")
     report_date = a1_raw[:10] if a1_raw and len(a1_raw) >= 10 else now_tw().strftime("%Y-%m-%d")
 
-    # 取消摘要（只保留 >0）
     cancel_routes = []
     for name, cell in DAILY_CANCEL_MAP.items():
         v = _to_int(get_a1(rows, cell, "0"))
         if v > 0:
             cancel_routes.append({"name": name, "count": v})
 
-    # 已飛摘要（皆顯示，左值/右值）
     flown_routes = []
     for name, (c1, c2) in DAILY_FLOWN_MAP.items():
         n1 = _to_int(get_a1(rows, c1, "0"))
@@ -283,7 +253,7 @@ def extract_daily(rows: List[List[str]]) -> Dict[str, Any]:
     }
 
 # =========================
-# Renderer：只負責把 dict → Flex JSON（不碰資料來源）
+# Renderer
 # =========================
 
 def bubble_cover(start: str, end: str) -> Dict[str, Any]:
@@ -316,7 +286,6 @@ def bubble_cover(start: str, end: str) -> Dict[str, Any]:
 
 
 def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: str) -> Dict[str, Any]:
-    # 需求：第二張至第七張圖卡副標題統一為『昨日(YYYY/MM/DD)摘要統計』
     subtitle = f"昨日({ymd_yesterday})摘要統計"
     return {
         "type": "bubble",
@@ -340,79 +309,12 @@ def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: 
     }
 
 
-
 def flex_weekly_payload(data: Dict[str, Any]) -> FlexSendMessage:
     bubbles = [bubble_cover(data["cover"]["start"], data["cover"]["end"])]
     y = data["yesterday"]
     for item in data["routes"]:
         bubbles.append(bubble_route(item["title"], y, item["cp"], item["cq"], item["cr"], item["cs"]))
     return FlexSendMessage(alt_text="7日內國內線統計表", contents={"type": "carousel", "contents": bubbles})
-
-
-def bubble_daily_cancel(date_str: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    # 當日取消摘要（只顯示 >0 的路線；數字紅色；數字緊接在標題後）
-    list_contents: List[Dict[str, Any]] = []
-    for it in items:
-        list_contents.append({
-            "type": "text",
-            "text": f"{it['name']}：{it['count']}",
-            "size": "lg",
-            "contents": [
-                {"type": "span", "text": f"{it['name']}："},
-                {"type": "span", "text": str(it['count']), "weight": "bold", "color": "#C62828"}
-            ]
-        })
-    if not list_contents:
-        list_contents.append({"type": "text", "text": "（本日無取消）", "size": "sm", "color": "#888888"})
-
-    return {
-        "type": "bubble",
-        "size": "mega",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {"type": "text", "text": "當日取消摘要", "weight": "bold", "size": "lg"},
-                {"type": "text", "text": f"{date_str}", "size": "sm", "color": "#888888"},
-                {"type": "separator", "margin": "md"},
-                {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": list_contents}
-            ]
-        }
-    }
-
-
-def bubble_daily_flown(date_str: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    # 當日已飛摘要（左值綠色 / 右值黑色；數字緊接在標題後）
-    list_contents: List[Dict[str, Any]] = []
-    for it in items:
-        list_contents.append({
-            "type": "text",
-            "text": f"{it['name']}：{it['n1']}/{it['n2']}",
-            "size": "lg",
-            "contents": [
-                {"type": "span", "text": f"{it['name']}："},
-                {"type": "span", "text": str(it['n1']), "weight": "bold", "color": "#2E7D32"},
-                {"type": "span", "text": "/", "weight": "bold"},
-                {"type": "span", "text": str(it['n2']), "weight": "bold", "color": "#111111"}
-            ]
-        })
-
-    return {
-        "type": "bubble",
-        "size": "mega",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {"type": "text", "text": "當日已飛摘要", "weight": "bold", "size": "lg"},
-                {"type": "text", "text": f"{date_str}", "size": "sm", "color": "#888888"},
-                {"type": "separator", "margin": "md"},
-                {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": list_contents}
-            ]
-        }
-    }
 
 
 def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
@@ -434,7 +336,6 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
     flown_pct = pct(flown_i, sched_i)
     cancel_pct = pct(canc_i, sched_i)
 
-    # 第一頁：總覽
     bubble_overview = {
         "type": "bubble",
         "size": "mega",
@@ -444,54 +345,80 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
             "spacing": "md",
             "contents": [
                 {"type": "text", "text": "國內線當日運量統計", "weight": "bold", "size": "lg"},
-                {"type": "text", "text": f"{data['date']}摘要", "size": "sm", "color": "#888888"},
+                {"type": "text", "text": f"日期：{data['date']}", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
-                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "本日預計架次", "size": "lg", "color": "#333333", "flex": 2},
-                    {"type": "box", "layout": "vertical", "flex": 3, "contents": [
-                        {"type": "text", "text": str(data['scheduled'] or '-') , "size": "xxl", "weight": "bold", "color": "#111111", "align": "end"}
-                    ], "alignItems": "flex-end"}
-                ]},
-                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "已飛架次", "size": "lg", "color": "#2E7D32", "flex": 2},
-                    {"type": "box", "layout": "vertical", "flex": 3, "contents": [
-                        {"type": "text", "text": str(data['flown'] or '-') , "size": "xxl", "weight": "bold", "color": "#2E7D32", "align": "end"},
-                        {"type": "text", "text": f"({flown_pct}%)", "size": "xs", "color": "#2E7D32", "align": "end"}
-                    ], "alignItems": "flex-end"}
-                ]},
-                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [
-                    {"type": "text", "text": "取消架次", "size": "lg", "color": "#C62828", "flex": 2},
-                    {"type": "box", "layout": "vertical", "flex": 3, "contents": [
-                        {"type": "text", "text": str(data['cancelled'] or '-') , "size": "xxl", "weight": "bold", "color": "#C62828", "align": "end"},
-                        {"type": "text", "text": f"({cancel_pct}%)", "size": "xs", "color": "#C62828", "align": "end"}
-                    ], "alignItems": "flex-end"}
-                ]},
-                {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": data['sheet_url']}, "margin": "md"}
+                {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": [
+                    {"type": "box", "layout": "horizontal", "contents": [
+                        {"type": "text", "text": "本日預計架次", "flex": 2, "size": "md"},
+                        {"type": "text", "text": str(data["scheduled"]), "flex": 1, "size": "md", "align": "end", "weight": "bold"}
+                    ]},
+                    {"type": "box", "layout": "horizontal", "contents": [
+                        {"type": "text", "text": "已飛架次", "flex": 2, "size": "md"},
+                        {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+                            {"type": "text", "text": str(data["flown"]), "size": "md", "align": "end", "weight": "bold"},
+                            {"type": "text", "text": f"({flown_pct}%)", "size": "xs", "align": "end", "color": "#666666"}
+                        ]}
+                    ]},
+                    {"type": "box", "layout": "horizontal", "contents": [
+                        {"type": "text", "text": "取消架次", "flex": 2, "size": "md"},
+                        {"type": "box", "layout": "vertical", "flex": 1, "contents": [
+                            {"type": "text", "text": str(data["cancelled"]), "size": "md", "align": "end", "weight": "bold"},
+                            {"type": "text", "text": f"({cancel_pct}%)", "size": "xs", "align": "end", "color": "#666666"}
+                        ]}
+                    ]}
+                ]}
             ]
-        },
-        "styles": {"body": {"backgroundColor": "#FFFFFF"}}
+        }
     }
 
-    # 第二頁：取消摘要
-    bubble_cancel = bubble_daily_cancel(data['date'], data.get('cancel_routes', []))
+    # 取消與已飛摘要卡（可再依需求調整）
+    bubbles = [bubble_overview]
 
-    # 第三頁：已飛摘要
-    bubble_flown = bubble_daily_flown(data['date'], data.get('flown_routes', []))
+    if data.get("cancel_routes"):
+        lines = [f"{x['name']}：{x['count']}" for x in data["cancel_routes"]]
+        bubbles.append({
+            "type": "bubble",
+            "size": "mega",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {"type": "text", "text": "路線別取消摘要", "weight": "bold", "size": "lg"},
+                    {"type": "separator", "margin": "md"},
+                    {"type": "text", "text": "\n".join(lines), "wrap": True}
+                ]
+            }
+        })
 
-    return FlexSendMessage(
-        alt_text=f"國內線當日運量統計（{data['date']}）",
-        contents={"type": "carousel", "contents": [bubble_overview, bubble_cancel, bubble_flown]}
-    )
+    if data.get("flown_routes"):
+        lines = [f"{x['name']}：{x['n1']}/{x['n2']}" for x in data["flown_routes"]]
+        bubbles.append({
+            "type": "bubble",
+            "size": "mega",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {"type": "text", "text": "路線別已飛摘要", "weight": "bold", "size": "lg"},
+                    {"type": "separator", "margin": "md"},
+                    {"type": "text", "text": "\n".join(lines), "wrap": True}
+                ]
+            }
+        })
+
+    return FlexSendMessage(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})
 
 # =========================
-# Pipeline：從來源 → 抽取 → 渲染（兩個指令共用同一種流程）
+# Builder：把抽取與渲染串起來
 # =========================
 
 def build_weekly_flex_message() -> FlexSendMessage:
     rows = fetch_gviz_csv(WEEKLY_CSV_URL)
-    data = extract_weekly(rows)          # 沿用原抽取
-    data = weekly_apply_v2(rows, data)   # 套用新版欄位與日期規格
+    data = extract_weekly(rows)          # 直接以 A1 座標抽取（含 CG2 日期區間）
     return flex_weekly_payload(data)
+
 
 def build_daily_flex_message() -> FlexSendMessage:
     rows = fetch_gviz_csv(DAILY_CSV_URL)
@@ -499,31 +426,19 @@ def build_daily_flex_message() -> FlexSendMessage:
     return flex_daily_payload(data)
 
 # =========================
-# 健康檢查（Cloud Run 健檢用）
-@app.route("/healthz", methods=["GET", "HEAD"])
-def healthz():
-    # Cloud Run 偶爾會用 HEAD 做健檢；一律回 200
-    if request.method == "HEAD":
-        return "", 200
-    return "ok", 200
-
-# 額外提供根路由與 ready 檢查，避免 404
-@app.route("/", methods=["GET"])
-def root():
-    return "ok", 200
-
-@app.route("/readyz", methods=["GET", "HEAD"])
-def readyz():
-    if request.method == "HEAD":
-        return "", 200
-    return "ok", 200
-
-# LINE Webhook
+# Flask 路由
 # =========================
-@app.route("/callback", methods=["POST"])
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok", "time": now_tw().isoformat()}
+
+
+@app.post("/callback")
 def callback():
     if not handler:
-        return "LINE handler not configured", 503
+        return ("handler not configured", 500)
+
     signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
     try:
@@ -533,33 +448,30 @@ def callback():
     return "OK"
 
 
-if handler:
-    @handler.add(MessageEvent, message=TextMessage)
-    def handle_message(event: MessageEvent):
-        text = (event.message.text or "").strip()
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event: MessageEvent):
+    text = (event.message.text or "").strip()
+    reply: TextSendMessage | FlexSendMessage
 
-        if text == "7日內國內線統計表":
-            try:
-                line_bot_api.reply_message(event.reply_token, build_weekly_flex_message())
-            except Exception as e:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"7日內國內線統計表暫時無法使用 ({e})"))
-            return
+    try:
+        if text in ["7日內國內線統計表", "7日內統計", "7日統計", "7日內"]:
+            reply = build_weekly_flex_message()
+        elif text in ["國內線當日運量統計", "當日運量", "今日國內線"]:
+            reply = build_daily_flex_message()
+        else:
+            tips = (
+                "可用指令：\n"
+                "・7日內國內線統計表\n"
+                "・國內線當日運量統計"
+            )
+            reply = TextSendMessage(text=tips)
+    except Exception as e:
+        reply = TextSendMessage(text=f"查詢失敗：{e}\n請確認資料來源是否可讀或欄位是否異動。")
 
-        if text == "國內線當日運量統計":
-            try:
-                line_bot_api.reply_message(event.reply_token, build_daily_flex_message())
-            except Exception as e:
-                today = date_pack_for_ui()["today"]
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"國內線當日運量統計 {today} 失敗 ({e})"))
-            return
-
-        # 其他文字先不回覆，避免干擾既有流程
-        return
+    if line_bot_api:
+        line_bot_api.reply_message(event.reply_token, reply)
 
 
-# 本機啟動（Cloud Run 可忽略）
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))
+    port = int(os.environ.get("PORT", "8080"))
     app.run(host="0.0.0.0", port=port)
-
-
