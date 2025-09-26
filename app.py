@@ -296,7 +296,7 @@ def flex_weekly_payload(data: Dict[str, Any]) -> FlexSendMessage:
 
 
 def bubble_daily_cancel(date_str: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    # 當日取消摘要（只顯示 >0 的路線；數字紅色）
+    # 當日取消摘要（只顯示 >0 的路線；數字紅色；數字緊接在標題後）
     list_contents: List[Dict[str, Any]] = []
     for it in items:
         list_contents.append({
@@ -304,9 +304,8 @@ def bubble_daily_cancel(date_str: str, items: List[Dict[str, Any]]) -> Dict[str,
             "layout": "horizontal",
             "contents": [
                 {"type": "text", "text": f"{it['name']}：", "size": "md"},
-                {"type": "text", "text": str(it['count']), "size": "md", "weight": "bold", "color": "#C62828", "align": "end"}
+                {"type": "text", "text": str(it['count']), "size": "lg", "weight": "bold", "color": "#C62828"}
             ],
-            "justifyContent": "space-between",
             "margin": "sm"
         })
     if not list_contents:
@@ -330,26 +329,18 @@ def bubble_daily_cancel(date_str: str, items: List[Dict[str, Any]]) -> Dict[str,
 
 
 def bubble_daily_flown(date_str: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    # 當日已飛摘要（左值綠色 / 右值黑色）
+    # 當日已飛摘要（左值綠色 / 右值黑色；數字緊接在標題後）
     list_contents: List[Dict[str, Any]] = []
     for it in items:
-        right_box = {
-            "type": "box",
-            "layout": "horizontal",
-            "contents": [
-                {"type": "text", "text": str(it['n1']), "size": "md", "weight": "bold", "color": "#2E7D32", "align": "end"},
-                {"type": "text", "text": "/", "size": "md", "weight": "bold", "align": "center"},
-                {"type": "text", "text": str(it['n2']), "size": "md", "weight": "bold", "color": "#111111", "align": "end"},
-            ]
-        }
         list_contents.append({
             "type": "box",
             "layout": "horizontal",
             "contents": [
-                {"type": "text", "text": f"{it['name']}：", "size": "md"},
-                right_box
+                {"type": "text", "text": f"{it['name']}：", "size": "lg"},
+                {"type": "text", "text": str(it['n1']), "size": "lg", "weight": "bold", "color": "#2E7D32"},
+                {"type": "text", "text": "/", "size": "lg", "weight": "bold"},
+                {"type": "text", "text": str(it['n2']), "size": "lg", "weight": "bold", "color": "#111111"},
             ],
-            "justifyContent": "space-between",
             "margin": "sm"
         })
 
