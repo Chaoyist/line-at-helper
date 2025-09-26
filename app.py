@@ -7,7 +7,7 @@ import os
 import csv
 import requests
 import datetime
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Union
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -104,16 +104,111 @@ def get_a1(rows: List[List[str]], a1: str, default: str = "-") -> str:
 # =========================
 # 常數：Google Sheets
 # =========================
-# Weekly A1 對應（依你提供的 CSV 轉換後座標，順序= 架次、座位數、載客數、載客率）
-WEEKLY_routes: List[Dict[str, Any]] = []
+
+# --- Weekly: 統計1（CSV 範圍 B1:DE32）---
+WEEKLY_FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
+WEEKLY_CSV_URL = (
+    f"https://docs.google.com/spreadsheets/d/{WEEKLY_FILE_ID}/gviz/tq?"
+    "tqx=out:csv&sheet=%E7%B5%B1%E8%A8%881&range=B1:DE32"
+)
+WEEKLY_SHEET_URL = (
+    "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link"
+)
+
+# 週報卡片順序（與 Flex 卡片輸出順序一致）
+ROUTE_ORDER = [
+    "各航線摘要統計",
+    "金門航線",
+    "澎湖航線",
+    "馬祖航線",
+    "本島航線",
+    "其他離島航線",
+]
+
+# 你最新提供的 A1 對應（順序＝ 架次、座位數、載客數、載客率；直接使用，不再重新對應）
+WEEKLY_CELL_MAP: Dict[str, Tuple[str, str, str, str]] = {
+    "各航線摘要統計": ("CO31", "CP31", "CQ31", "CR31"),
+    "金門航線":     ("CO7",  "CP7",  "CQ7",  "CR7"),
+    "澎湖航線":     ("CO13", "CP13", "CQ13", "CR13"),
+    "馬祖航線":     ("CO18", "CP18", "CQ18", "CR18"),
+    "本島航線":     ("CO23", "CP23", "CQ23", "CR23"),
+    "其他離島航線": ("CO30", "CP30", "CQ30", "CR30"),
+}
+
+# --- Daily: 國內線（CSV 範圍 D1:P38）---
+DAILY_FILE_ID = "1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd"
+DAILY_CSV_URL = (
+    f"https://docs.google.com/spreadsheets/d/{DAILY_FILE_ID}/gviz/tq?"
+    "tqx=out:csv&sheet=%E5%9C%8B%E5%85%A7%E7%B7%9A&range=D1:P38"
+)
+CELL_SCHEDULED = "M19"
+CELL_FLOWN     = "M34"
+CELL_CANCELLED = "M28"
+DAILY_SHEET_URL = (
+    "https://docs.google.com/spreadsheets/d/1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd/edit?usp=drive_link"
+)
+
+# Daily 路線對照（擷取後的 CSV A1 座標）
+DAILY_CANCEL_MAP: Dict[str, str] = {
+    "金門航線": "C28",
+    "澎湖航線": "F28",
+    "馬祖航線": "I28",
+    "花蓮航線": "J28",
+    "臺東航線": "K28",
+    "其他離島航線": "L28",
+}
+DAILY_FLOWN_MAP: Dict[str, Tuple[str, str]] = {
+    "金門航線": ("C34", "C19"),
+    "澎湖航線": ("F34", "F19"),
+    "馬祖航線": ("I34", "I19"),
+    "花蓮航線": ("J34", "J19"),
+    "臺東航線": ("K34", "K19"),
+    "其他離島航線": ("L34", "L19"),
+}
+
+# =========================
+# 抽取器（Extractor）
+# =========================
+
+def extract_weekly(rows: List[List[str]]) -> Dict[str, Any]:
+    """
+    依你提供的 CSV A1 直接抓值（不做重新對應）：
+    - 封面日期：讀 CG2（格式 MM月DD日 = 昨日），自動補年份；若非此格式則以台灣時間的昨天。
+    - 每張卡四個欄位：按 WEEKLY_CELL_MAP 順序抓取。
+    """
+    import re
+
+    def _parse_mmdd_zh_to_date(mmdd_text: str) -> datetime.date:
+        m = re.search(r"(\d{1,2})月(\d{1,2})日", mmdd_text or "")
+        today = now_tw().date()
+        if not m:
+            return today - datetime.timedelta(days=1)
+        y = today.year
+        mm = int(m.group(1)); dd = int(m.group(2))
+        try:
+            d = datetime.date(y, mm, dd)
+        except Exception:
+            return today - datetime.timedelta(days=1)
+        if d > today:
+            d = datetime.date(y - 1, mm, dd)
+        return d
+
+    def _fmt(d: datetime.date) -> str:
+        return d.strftime("%Y/%m/%d")
+
+    cg2_raw = get_a1(rows, "CG2", "")
+    end_date = _parse_mmdd_zh_to_date(cg2_raw)
+    start_date = end_date - datetime.timedelta(days=7)
+
+    routes: List[Dict[str, Any]] = []
     for title in ROUTE_ORDER:
         c1, c2, c3, c4 = WEEKLY_CELL_MAP[title]
         routes.append({
             "title": title,
-            "cp": get_a1(rows, c1, "-"),
-            "cq": get_a1(rows, c2, "-"),
-            "cr": get_a1(rows, c3, "-"),
-            "cs": get_a1(rows, c4, "-"),
+            "cp": get_a1(rows, c1, "-"),  # 架次
+            "cq": get_a1(rows, c2, "-"),  # 座位數
+            "cr": get_a1(rows, c3, "-"),  # 載客數
+            "cs": get_a1(rows, c4, "-"),  # 載客率
         })
 
     return {
@@ -218,7 +313,7 @@ def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: 
 
 
 def flex_weekly_payload(data: Dict[str, Any]) -> FlexSendMessage:
-    bubbles = [bubble_cover(data["cover"]["start"], data["cover"]["end"])]
+    bubbles = [bubble_cover(data["cover"]["start"], data["cover"]["end"]) ]
     y = data["yesterday"]
     for item in data["routes"]:
         bubbles.append(bubble_route(item["title"], y, item["cp"], item["cq"], item["cr"], item["cs"]))
@@ -313,7 +408,6 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
     if data.get("flown_routes"):
         flown_lines = []
         for x in data["flown_routes"]:
-            # 將 57/80 連在一起顯示，57 綠色、/80 黑色，採用 span 分段著色
             value_text = {
                 "type": "text",
                 "size": "lg",
@@ -366,6 +460,7 @@ def build_daily_flex_message() -> FlexSendMessage:
 
 # =========================
 # Flask 路由
+# =========================
 
 @app.get("/weekly/debug")
 def weekly_debug():
@@ -383,13 +478,9 @@ def weekly_debug():
         }
     return out
 
-# Flask 路由
-# =========================
-
 @app.get("/healthz")
 def healthz():
     return {"status": "ok", "time": now_tw().isoformat()}
-
 
 @app.post("/callback")
 def callback():
@@ -404,29 +495,30 @@ def callback():
         abort(400)
     return "OK"
 
+# 僅在 handler 存在時註冊 LINE 事件處理，避免 None 導致載入時崩潰（dev/health 檢測可用）。
+if handler:
+    @handler.add(MessageEvent, message=TextMessage)
+    def handle_message(event: MessageEvent):
+        text = (event.message.text or "").strip()
+        reply: Union[TextSendMessage, FlexSendMessage]
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event: MessageEvent):
-    text = (event.message.text or "").strip()
-    reply: TextSendMessage | FlexSendMessage
+        try:
+            if text in ["7日內國內線統計表", "7日內統計", "7日統計", "7日內"]:
+                reply = build_weekly_flex_message()
+            elif text in ["國內線當日運量統計", "當日運量", "今日國內線"]:
+                reply = build_daily_flex_message()
+            else:
+                tips = (
+                    "可用指令：\n"
+                    "・7日內國內線統計表\n"
+                    "・國內線當日運量統計"
+                )
+                reply = TextSendMessage(text=tips)
+        except Exception as e:
+            reply = TextSendMessage(text=f"查詢失敗：{e}\n請確認資料來源是否可讀或欄位是否異動。")
 
-    try:
-        if text in ["7日內國內線統計表", "7日內統計", "7日統計", "7日內"]:
-            reply = build_weekly_flex_message()
-        elif text in ["國內線當日運量統計", "當日運量", "今日國內線"]:
-            reply = build_daily_flex_message()
-        else:
-            tips = (
-                "可用指令：\n"
-                "・7日內國內線統計表\n"
-                "・國內線當日運量統計"
-            )
-            reply = TextSendMessage(text=tips)
-    except Exception as e:
-        reply = TextSendMessage(text=f"查詢失敗：{e}\n請確認資料來源是否可讀或欄位是否異動。")
-
-    if line_bot_api:
-        line_bot_api.reply_message(event.reply_token, reply)
+        if line_bot_api:
+            line_bot_api.reply_message(event.reply_token, reply)
 
 
 if __name__ == "__main__":
