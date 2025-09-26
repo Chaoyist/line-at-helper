@@ -324,18 +324,19 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
         except Exception:
             return None
 
+    sched_i = to_int(data.get("scheduled"))
+    flown_i = to_int(data.get("flown"))
+    canc_i = to_int(data.get("cancelled"))
+
     def pct(n, d):
         if n is None or d is None or d <= 0:
             return 0
-        v = max(0, min(100, round(n * 100 / d)))
-        return v
+        return max(0, min(100, round(n * 100 / d)))
 
-    sched_i = to_int(data["scheduled"])
-    flown_i = to_int(data["flown"])
-    canc_i = to_int(data["cancelled"])
     flown_pct = pct(flown_i, sched_i)
     cancel_pct = pct(canc_i, sched_i)
 
+    # ===== 第一張：總覽 =====
     bubble_overview = {
         "type": "bubble",
         "size": "mega",
@@ -349,33 +350,42 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
                 {"type": "separator", "margin": "md"},
                 {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": [
                     {"type": "box", "layout": "horizontal", "contents": [
-                        {"type": "text", "text": "本日預計架次", "flex": 2, "size": "md"},
-                        {"type": "text", "text": str(data["scheduled"]), "flex": 1, "size": "md", "align": "end", "weight": "bold"}
+                        {"type": "text", "text": "預計架次", "flex": 2, "size": "lg", "weight": "bold", "color": "#000000"},
+                        {"type": "text", "text": str(data.get("scheduled", "-")), "flex": 1, "size": "lg", "align": "end", "weight": "bold", "color": "#000000"}
                     ]},
-                    {"type": "box", "layout": "horizontal", "contents": [
-                        {"type": "text", "text": "已飛架次", "flex": 2, "size": "md"},
-                        {"type": "box", "layout": "vertical", "flex": 1, "contents": [
-                            {"type": "text", "text": str(data["flown"]), "size": "md", "align": "end", "weight": "bold"},
-                            {"type": "text", "text": f"({flown_pct}%)", "size": "xs", "align": "end", "color": "#666666"}
-                        ]}
+                    {"type": "box", "layout": "vertical", "contents": [
+                        {"type": "box", "layout": "horizontal", "contents": [
+                            {"type": "text", "text": "已飛架次", "flex": 2, "size": "lg", "weight": "bold", "color": "#000000"},
+                            {"type": "text", "text": str(data.get("flown", "-")), "flex": 1, "size": "lg", "align": "end", "weight": "bold", "color": "#16A34A"}
+                        ]},
+                        {"type": "text", "text": f"({flown_pct}%)", "size": "xs", "align": "end", "color": "#16A34A"}
                     ]},
-                    {"type": "box", "layout": "horizontal", "contents": [
-                        {"type": "text", "text": "取消架次", "flex": 2, "size": "md"},
-                        {"type": "box", "layout": "vertical", "flex": 1, "contents": [
-                            {"type": "text", "text": str(data["cancelled"]), "size": "md", "align": "end", "weight": "bold"},
-                            {"type": "text", "text": f"({cancel_pct}%)", "size": "xs", "align": "end", "color": "#666666"}
-                        ]}
+                    {"type": "box", "layout": "vertical", "contents": [
+                        {"type": "box", "layout": "horizontal", "contents": [
+                            {"type": "text", "text": "取消架次", "flex": 2, "size": "lg", "weight": "bold", "color": "#000000"},
+                            {"type": "text", "text": str(data.get("cancelled", "-")), "flex": 1, "size": "lg", "align": "end", "weight": "bold", "color": "#DC2626"}
+                        ]},
+                        {"type": "text", "text": f"({cancel_pct}%)", "size": "xs", "align": "end", "color": "#DC2626"}
                     ]}
                 ]}
             ]
         }
     }
 
-    # 取消與已飛摘要卡（可再依需求調整）
     bubbles = [bubble_overview]
 
+    # ===== 第二張：當日取消摘要 =====
     if data.get("cancel_routes"):
-        lines = [f"{x['name']}：{x['count']}" for x in data["cancel_routes"]]
+        cancel_lines = []
+        for x in data["cancel_routes"]:
+            cancel_lines.append({
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": f"{x['name']}：", "size": "lg", "wrap": False, "flex": 0},
+                    {"type": "text", "text": str(x['count']), "size": "lg", "weight": "bold", "color": "#DC2626", "wrap": False}
+                ]
+            })
         bubbles.append({
             "type": "bubble",
             "size": "mega",
@@ -384,15 +394,27 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
                 "layout": "vertical",
                 "spacing": "md",
                 "contents": [
-                    {"type": "text", "text": "路線別取消摘要", "weight": "bold", "size": "lg"},
+                    {"type": "text", "text": "當日取消摘要", "weight": "bold", "size": "lg"},
                     {"type": "separator", "margin": "md"},
-                    {"type": "text", "text": "\n".join(lines), "wrap": True}
+                    {"type": "box", "layout": "vertical", "spacing": "sm", "contents": cancel_lines}
                 ]
             }
         })
 
+    # ===== 第三張：當日已飛摘要 =====
     if data.get("flown_routes"):
-        lines = [f"{x['name']}：{x['n1']}/{x['n2']}" for x in data["flown_routes"]]
+        flown_lines = []
+        for x in data["flown_routes"]:
+            flown_lines.append({
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": f"{x['name']}：", "size": "lg", "wrap": False, "flex": 0},
+                    {"type": "text", "text": str(x['n1']), "size": "lg", "weight": "bold", "color": "#16A34A", "wrap": False},
+                    {"type": "text", "text": "/", "size": "lg", "color": "#000000", "wrap": False, "margin": "sm"},
+                    {"type": "text", "text": str(x['n2']), "size": "lg", "weight": "bold", "color": "#000000", "wrap": False}
+                ]
+            })
         bubbles.append({
             "type": "bubble",
             "size": "mega",
@@ -401,14 +423,14 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
                 "layout": "vertical",
                 "spacing": "md",
                 "contents": [
-                    {"type": "text", "text": "路線別已飛摘要", "weight": "bold", "size": "lg"},
+                    {"type": "text", "text": "當日已飛摘要", "weight": "bold", "size": "lg"},
                     {"type": "separator", "margin": "md"},
-                    {"type": "text", "text": "\n".join(lines), "wrap": True}
+                    {"type": "box", "layout": "vertical", "spacing": "sm", "contents": flown_lines}
                 ]
             }
         })
 
-    return FlexSendMessage(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})
+    return FlexSendMessage(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})
 
 # =========================
 # Builder：把抽取與渲染串起來
