@@ -300,13 +300,13 @@ def bubble_daily_cancel(date_str: str, items: List[Dict[str, Any]]) -> Dict[str,
     list_contents: List[Dict[str, Any]] = []
     for it in items:
         list_contents.append({
-            "type": "box",
-            "layout": "horizontal",
+            "type": "text",
+            "text": f"{it['name']}：{it['count']}",
+            "size": "lg",
             "contents": [
-                {"type": "text", "text": f"{it['name']}：", "size": "md"},
-                {"type": "text", "text": str(it['count']), "size": "lg", "weight": "bold", "color": "#C62828"}
-            ],
-            "margin": "sm"
+                {"type": "span", "text": f"{it['name']}："},
+                {"type": "span", "text": str(it['count']), "weight": "bold", "color": "#C62828"}
+            ]
         })
     if not list_contents:
         list_contents.append({"type": "text", "text": "（本日無取消）", "size": "sm", "color": "#888888"})
@@ -333,15 +333,15 @@ def bubble_daily_flown(date_str: str, items: List[Dict[str, Any]]) -> Dict[str, 
     list_contents: List[Dict[str, Any]] = []
     for it in items:
         list_contents.append({
-            "type": "box",
-            "layout": "horizontal",
+            "type": "text",
+            "text": f"{it['name']}：{it['n1']}/{it['n2']}",
+            "size": "lg",
             "contents": [
-                {"type": "text", "text": f"{it['name']}：", "size": "lg"},
-                {"type": "text", "text": str(it['n1']), "size": "lg", "weight": "bold", "color": "#2E7D32"},
-                {"type": "text", "text": "/", "size": "lg", "weight": "bold"},
-                {"type": "text", "text": str(it['n2']), "size": "lg", "weight": "bold", "color": "#111111"},
-            ],
-            "margin": "sm"
+                {"type": "span", "text": f"{it['name']}："},
+                {"type": "span", "text": str(it['n1']), "weight": "bold", "color": "#2E7D32"},
+                {"type": "span", "text": "/", "weight": "bold"},
+                {"type": "span", "text": str(it['n2']), "weight": "bold", "color": "#111111"}
+            ]
         })
 
     return {
