@@ -142,6 +142,25 @@ DAILY_SHEET_URL = (
     "https://docs.google.com/spreadsheets/d/1KTPwIgiqB2AOoQI4P_TySam0l12DO7wd/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"
 )
 
+# --- Daily 路線對照（以「擷取後的 CSV A1 座標」為準）---
+DAILY_CANCEL_MAP: Dict[str, str] = {
+    "金門航線": "C28",
+    "澎湖航線": "F28",
+    "馬祖航線": "I28",
+    "花蓮航線": "J28",
+    "臺東航線": "K28",
+    "其他航線": "L28",
+}
+
+DAILY_FLOWN_MAP: Dict[str, Tuple[str, str]] = {
+    "金門航線": ("C34", "C19"),
+    "澎湖航線": ("F34", "F19"),
+    "馬祖航線": ("I34", "I19"),
+    "花蓮航線": ("J34", "J19"),
+    "臺東航線": ("K34", "K19"),
+    "其他航線": ("L34", "L19"),
+}
+
 # =========================
 # 抽取器（Extractor）：只做資料萃取，回傳簡單 dict
 # =========================
@@ -175,16 +194,40 @@ def extract_daily(rows: List[List[str]]) -> Dict[str, Any]:
     """
     1) 日期：抓擷取後的 A1 前 10 個字元（YYYY-MM-DD）。
     2) 其他數值：依固定儲存格（M19、M34、M28）。
+    3) 新增：路線別取消摘要（C/F/I/J/K/L28），與路線別已飛摘要（34 與 19 列）。
     備註：CSV 範圍保持 D1:P38，日期已在擷取後的 A1。
     """
+    def _to_int(x: str) -> int:
+        try:
+            return int(str(x).replace(',', '').strip())
+        except Exception:
+            return 0
+
     a1_raw = get_a1(rows, "A1", "-")
     report_date = a1_raw[:10] if a1_raw and len(a1_raw) >= 10 else now_tw().strftime("%Y-%m-%d")
+
+    # 取消摘要（只保留 >0）
+    cancel_routes = []
+    for name, cell in DAILY_CANCEL_MAP.items():
+        v = _to_int(get_a1(rows, cell, "0"))
+        if v > 0:
+            cancel_routes.append({"name": name, "count": v})
+
+    # 已飛摘要（皆顯示，左值/右值）
+    flown_routes = []
+    for name, (c1, c2) in DAILY_FLOWN_MAP.items():
+        n1 = _to_int(get_a1(rows, c1, "0"))
+        n2 = _to_int(get_a1(rows, c2, "0"))
+        flown_routes.append({"name": name, "n1": n1, "n2": n2})
+
     return {
         "date": report_date,
         "scheduled": get_a1(rows, CELL_SCHEDULED, "-"),
         "flown": get_a1(rows, CELL_FLOWN, "-"),
         "cancelled": get_a1(rows, CELL_CANCELLED, "-"),
         "sheet_url": DAILY_SHEET_URL,
+        "cancel_routes": cancel_routes,
+        "flown_routes": flown_routes,
     }
 
 # =========================
@@ -252,6 +295,81 @@ def flex_weekly_payload(data: Dict[str, Any]) -> FlexSendMessage:
     return FlexSendMessage(alt_text="7日內國內線統計表", contents={"type": "carousel", "contents": bubbles})
 
 
+def bubble_daily_cancel(date_str: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    # 當日取消摘要（只顯示 >0 的路線；數字紅色）
+    list_contents: List[Dict[str, Any]] = []
+    for it in items:
+        list_contents.append({
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": f"{it['name']}：", "size": "md"},
+                {"type": "text", "text": str(it['count']), "size": "md", "weight": "bold", "color": "#C62828", "align": "end"}
+            ],
+            "justifyContent": "space-between",
+            "margin": "sm"
+        })
+    if not list_contents:
+        list_contents.append({"type": "text", "text": "（本日無取消）", "size": "sm", "color": "#888888"})
+
+    return {
+        "type": "bubble",
+        "size": "mega",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "當日取消摘要", "weight": "bold", "size": "lg"},
+                {"type": "text", "text": f"{date_str}", "size": "sm", "color": "#888888"},
+                {"type": "separator", "margin": "md"},
+                {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": list_contents}
+            ]
+        }
+    }
+
+
+def bubble_daily_flown(date_str: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    # 當日已飛摘要（左值綠色 / 右值黑色）
+    list_contents: List[Dict[str, Any]] = []
+    for it in items:
+        right_box = {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": str(it['n1']), "size": "md", "weight": "bold", "color": "#2E7D32", "align": "end"},
+                {"type": "text", "text": "/", "size": "md", "weight": "bold", "align": "center"},
+                {"type": "text", "text": str(it['n2']), "size": "md", "weight": "bold", "color": "#111111", "align": "end"},
+            ]
+        }
+        list_contents.append({
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": f"{it['name']}：", "size": "md"},
+                right_box
+            ],
+            "justifyContent": "space-between",
+            "margin": "sm"
+        })
+
+    return {
+        "type": "bubble",
+        "size": "mega",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "當日已飛摘要", "weight": "bold", "size": "lg"},
+                {"type": "text", "text": f"{date_str}", "size": "sm", "color": "#888888"},
+                {"type": "separator", "margin": "md"},
+                {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": list_contents}
+            ]
+        }
+    }
+
+
 def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
     def to_int(x):
         try:
@@ -271,7 +389,8 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
     flown_pct = pct(flown_i, sched_i)
     cancel_pct = pct(canc_i, sched_i)
 
-    bubble = {
+    # 第一頁：總覽
+    bubble_overview = {
         "type": "bubble",
         "size": "mega",
         "body": {
@@ -307,7 +426,17 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
         },
         "styles": {"body": {"backgroundColor": "#FFFFFF"}}
     }
-    return FlexSendMessage(alt_text=f"國內線當日運量統計（{data['date']}）", contents=bubble)
+
+    # 第二頁：取消摘要
+    bubble_cancel = bubble_daily_cancel(data['date'], data.get('cancel_routes', []))
+
+    # 第三頁：已飛摘要
+    bubble_flown = bubble_daily_flown(data['date'], data.get('flown_routes', []))
+
+    return FlexSendMessage(
+        alt_text=f"國內線當日運量統計（{data['date']}）",
+        contents={"type": "carousel", "contents": [bubble_overview, bubble_cancel, bubble_flown]}
+    )
 
 # =========================
 # Pipeline：從來源 → 抽取 → 渲染（兩個指令共用同一種流程）
