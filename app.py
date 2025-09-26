@@ -107,8 +107,9 @@ def get_a1(rows: List[List[str]], a1: str, default: str = "-") -> str:
 WEEKLY_FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
 WEEKLY_CSV_URL = (
     f"https://docs.google.com/spreadsheets/d/{WEEKLY_FILE_ID}/gviz/tq?"
-    "tqx=out:csv&sheet=%E7%B5%B1%E8%A8%881&range=CP2:CS32"
+    "tqx=out:csv&sheet=%E7%B5%B1%E8%A8%881&range=B1:DE32"
 )
+
 WEEKLY_SHEET_URL = (
     "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"
 )
@@ -188,7 +189,58 @@ def extract_weekly(rows: List[List[str]]) -> Dict[str, Any]:
             "cp": cp, "cq": cq, "cr": cr, "cs": cs,
         })
     return data
+  
+def weekly_apply_v2(rows: List[List[str]], data: Dict[str, Any]) -> Dict[str, Any]:
+    """套用新版 weekly 規格：
+    - 日期從 CG2（MM月DD日，=昨日）換算成 YYYY/MM/DD，並回推 7 日。
+    - 各卡資料來源欄位更新為指定的 A1（依序：架次、座位數、載客數、載客率）。
+    """
+    import re
+    def _parse_mmdd_zh_to_date(mmdd_text: str) -> datetime.date:
+        m = re.search(r"(\d{1,2})月(\d{1,2})日", mmdd_text or "")
+        today = now_tw().date()
+        if not m:
+            return today - datetime.timedelta(days=1)
+        y = today.year
+        mm = int(m.group(1)); dd = int(m.group(2))
+        try:
+            d = datetime.date(y, mm, dd)
+        except Exception:
+            return today - datetime.timedelta(days=1)
+        # 跨年處理：若推得日期晚於今天，表示實際是去年
+        if d > today:
+            d = datetime.date(y - 1, mm, dd)
+        return d
 
+    def _fmt(d: datetime.date) -> str:
+        return d.strftime("%Y/%m/%d")
+
+    # 1) 由 CG2 算日期區間
+    cg2_text = get_a1(rows, "CG2", "")
+    end_date = _parse_mmdd_zh_to_date(cg2_text)
+    start_date = end_date - datetime.timedelta(days=7)
+    data["cover"] = {"start": _fmt(start_date), "end": _fmt(end_date)}
+    data["yesterday"] = _fmt(end_date)
+
+    # 2) 各卡資料來源欄位（依序：架次、座位數、載客數、載客率）
+    cell_map: Dict[str, Tuple[str, str, str, str]] = {
+        "各航線摘要統計": ("CO32", "CP32", "CQ32", "CR32"),
+        "金門航線": ("CO8", "CP8", "CQ8", "CR8"),
+        "澎湖航線": ("CO14", "CP14", "CQ14", "CR14"),
+        "馬祖航線": ("CO19", "CP19", "CQ19", "CR19"),
+        "本島航線": ("CO24", "CP24", "CQ24", "CR24"),
+        "其他離島航線": ("CO31", "CP31", "CQ31", "CR31"),
+    }
+
+    for r in data.get("routes", []):
+        title = r.get("title", "")
+        if title in cell_map:
+            c1, c2, c3, c4 = cell_map[title]
+            r["cp"] = get_a1(rows, c1, r.get("cp", "-"))
+            r["cq"] = get_a1(rows, c2, r.get("cq", "-"))
+            r["cr"] = get_a1(rows, c3, r.get("cr", "-"))
+            r["cs"] = get_a1(rows, c4, r.get("cs", "-"))
+    return data
 
 def extract_daily(rows: List[List[str]]) -> Dict[str, Any]:
     """
@@ -264,7 +316,8 @@ def bubble_cover(start: str, end: str) -> Dict[str, Any]:
 
 
 def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: str) -> Dict[str, Any]:
-    subtitle = f"昨日({ymd_yesterday})" if title == "各航線摘要統計" else f"昨日({ymd_yesterday})摘要統計"
+    # 需求：第二張至第七張圖卡副標題統一為『昨日(YYYY/MM/DD)摘要統計』
+    subtitle = f"昨日({ymd_yesterday})摘要統計"
     return {
         "type": "bubble",
         "size": "mega",
@@ -285,6 +338,7 @@ def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: 
             ]
         }
     }
+
 
 
 def flex_weekly_payload(data: Dict[str, Any]) -> FlexSendMessage:
@@ -435,9 +489,9 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
 
 def build_weekly_flex_message() -> FlexSendMessage:
     rows = fetch_gviz_csv(WEEKLY_CSV_URL)
-    data = extract_weekly(rows)
+    data = extract_weekly(rows)          # 沿用原抽取
+    data = weekly_apply_v2(rows, data)   # 套用新版欄位與日期規格
     return flex_weekly_payload(data)
-
 
 def build_daily_flex_message() -> FlexSendMessage:
     rows = fetch_gviz_csv(DAILY_CSV_URL)
@@ -507,4 +561,5 @@ if handler:
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
 
