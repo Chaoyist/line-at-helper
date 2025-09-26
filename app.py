@@ -104,6 +104,16 @@ def get_a1(rows: List[List[str]], a1: str, default: str = "-") -> str:
 # =========================
 # 常數：Google Sheets
 # =========================
+# Weekly A1 對應（依你提供的 CSV 轉換後座標，順序= 架次、座位數、載客數、載客率）
+WEEKLY_CELL_MAP: Dict[str, Tuple[str, str, str, str]] = {
+    "各航線摘要統計": ("CO32", "CP32", "CQ32", "CR32"),
+    "金門航線": ("CO8",  "CP8",  "CQ8",  "CR8"),
+    "澎湖航線": ("CO14", "CP14", "CQ14", "CR14"),
+    "馬祖航線": ("CO19", "CP19", "CQ19", "CR19"),
+    "本島航線": ("CO24", "CP24", "CQ24", "CR24"),
+    "其他離島航線": ("CO31", "CP31", "CQ31", "CR31"),
+}
+
 WEEKLY_FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
 WEEKLY_CSV_URL = (
     f"https://docs.google.com/spreadsheets/d/{WEEKLY_FILE_ID}/gviz/tq?"
@@ -188,18 +198,9 @@ def extract_weekly(rows: List[List[str]]) -> Dict[str, Any]:
     end_date = _parse_mmdd_zh_to_date(cg2_text)
     start_date = end_date - datetime.timedelta(days=7)
 
-    CELL_MAP: Dict[str, Tuple[str, str, str, str]] = {
-        "各航線摘要統計": ("CO32", "CP32", "CQ32", "CR32"),
-        "金門航線": ("CO8",  "CP8",  "CQ8",  "CR8"),
-        "澎湖航線": ("CO14", "CP14", "CQ14", "CR14"),
-        "馬祖航線": ("CO19", "CP19", "CQ19", "CR19"),
-        "本島航線": ("CO24", "CP24", "CQ24", "CR24"),
-        "其他離島航線": ("CO31", "CP31", "CQ31", "CR31"),
-    }
-
     routes: List[Dict[str, Any]] = []
     for title in ROUTE_ORDER:
-        c1, c2, c3, c4 = CELL_MAP[title]
+        c1, c2, c3, c4 = WEEKLY_CELL_MAP[title]
         routes.append({
             "title": title,
             "cp": get_a1(rows, c1, "-"),
@@ -457,6 +458,24 @@ def build_daily_flex_message() -> FlexSendMessage:
     return flex_daily_payload(data)
 
 # =========================
+# Flask 路由
+
+@app.get("/weekly/debug")
+def weekly_debug():
+    """即時檢查 Weekly 每張卡實際抓到的儲存格與值，方便對版。
+    會回傳各路線四個欄位（架次/座位/載客/載客率）的 A1 與值，以及 CG2 日期與 CSV 範圍。
+    """
+    rows = fetch_gviz_csv(WEEKLY_CSV_URL)
+    out: Dict[str, Any] = {"_csv_range": "B1:DE32", "_yesterday_CG2": get_a1(rows, "CG2", "")}
+    for title, (a, b, c, d) in WEEKLY_CELL_MAP.items():
+        out[title] = {
+            "架次": {"cell": a, "value": get_a1(rows, a, "")},
+            "座位數": {"cell": b, "value": get_a1(rows, b, "")},
+            "載客數": {"cell": c, "value": get_a1(rows, c, "")},
+            "載客率": {"cell": d, "value": get_a1(rows, d, "")},
+        }
+    return out
+
 # Flask 路由
 # =========================
 
