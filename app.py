@@ -351,19 +351,19 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
                 {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": [
                     {"type": "box", "layout": "horizontal", "contents": [
                         {"type": "text", "text": "預計架次", "flex": 2, "size": "lg", "weight": "bold", "color": "#000000"},
-                        {"type": "text", "text": str(data.get("scheduled", "-")), "flex": 1, "size": "lg", "align": "end", "weight": "bold", "color": "#000000"}
+                        {"type": "text", "text": str(data.get("scheduled", "-")), "flex": 1, "size": "xl", "align": "end", "weight": "bold", "color": "#000000"}
                     ]},
                     {"type": "box", "layout": "vertical", "contents": [
                         {"type": "box", "layout": "horizontal", "contents": [
                             {"type": "text", "text": "已飛架次", "flex": 2, "size": "lg", "weight": "bold", "color": "#000000"},
-                            {"type": "text", "text": str(data.get("flown", "-")), "flex": 1, "size": "lg", "align": "end", "weight": "bold", "color": "#16A34A"}
+                            {"type": "text", "text": str(data.get("flown", "-")), "flex": 1, "size": "xl", "align": "end", "weight": "bold", "color": "#16A34A"}
                         ]},
                         {"type": "text", "text": f"({flown_pct}%)", "size": "xs", "align": "end", "color": "#16A34A"}
                     ]},
                     {"type": "box", "layout": "vertical", "contents": [
                         {"type": "box", "layout": "horizontal", "contents": [
                             {"type": "text", "text": "取消架次", "flex": 2, "size": "lg", "weight": "bold", "color": "#000000"},
-                            {"type": "text", "text": str(data.get("cancelled", "-")), "flex": 1, "size": "lg", "align": "end", "weight": "bold", "color": "#DC2626"}
+                            {"type": "text", "text": str(data.get("cancelled", "-")), "flex": 1, "size": "xl", "align": "end", "weight": "bold", "color": "#DC2626"}
                         ]},
                         {"type": "text", "text": f"({cancel_pct}%)", "size": "xs", "align": "end", "color": "#DC2626"}
                     ]}
@@ -405,14 +405,23 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
     if data.get("flown_routes"):
         flown_lines = []
         for x in data["flown_routes"]:
+            # 將 57/80 連在一起顯示，57 綠色、/80 黑色，採用 span 分段著色
+            value_text = {
+                "type": "text",
+                "size": "lg",
+                "weight": "bold",
+                "wrap": False,
+                "contents": [
+                    {"type": "span", "text": str(x['n1']), "color": "#16A34A"},
+                    {"type": "span", "text": f"/{x['n2']}", "color": "#000000"}
+                ]
+            }
             flown_lines.append({
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
                     {"type": "text", "text": f"{x['name']}：", "size": "lg", "wrap": False, "flex": 0},
-                    {"type": "text", "text": str(x['n1']), "size": "lg", "weight": "bold", "color": "#16A34A", "wrap": False},
-                    {"type": "text", "text": "/", "size": "lg", "color": "#000000", "wrap": False, "margin": "sm"},
-                    {"type": "text", "text": str(x['n2']), "size": "lg", "weight": "bold", "color": "#000000", "wrap": False}
+                    value_text
                 ]
             })
         bubbles.append({
