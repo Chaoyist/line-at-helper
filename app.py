@@ -50,13 +50,32 @@ def date_pack_for_ui() -> Dict[str, str]:
     }
 
 
+# --- 1~5分鐘快取設定 ---
+CACHE_TTL_SECONDS = int(os.getenv("GVIZ_CACHE_TTL", "300"))  # 預設 300s，可用環境變數覆寫
+GVIZ_CACHE: Dict[str, Tuple[float, List[List[str]]]] = {}
+
 def fetch_gviz_csv(url: str) -> List[List[str]]:
+    # 先讀快取
+    try:
+        exp_ts, cached_rows = GVIZ_CACHE.get(url, (0.0, None))  # type: ignore
+        if cached_rows is not None and exp_ts > now_tw().timestamp():
+            return cached_rows
+    except Exception:
+        pass
+
     resp = requests.get(url, headers=HTTP_HEADERS, timeout=HTTP_TIMEOUT)
     resp.raise_for_status()
     text = resp.text.strip()
     if text.startswith("<!DOCTYPE html"):
         raise RuntimeError("CSV endpoint returned HTML – check sharing/publish settings")
-    return list(csv.reader(text.splitlines()))
+    rows = list(csv.reader(text.splitlines()))
+
+    # 寫入快取
+    try:
+        GVIZ_CACHE[url] = (now_tw().timestamp() + CACHE_TTL_SECONDS, rows)
+    except Exception:
+        pass
+    return rows
 
 
 def a1_to_index(a1: str) -> Tuple[int, int]:
@@ -89,6 +108,9 @@ WEEKLY_FILE_ID = "1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx"
 WEEKLY_CSV_URL = (
     f"https://docs.google.com/spreadsheets/d/{WEEKLY_FILE_ID}/gviz/tq?"
     "tqx=out:csv&sheet=%E7%B5%B1%E8%A8%881&range=CP2:CS32"
+)
+WEEKLY_SHEET_URL = (
+    "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"
 )
 # 列號為 1-based（你提供的 mapping）
 ROW_MAP = {
@@ -182,8 +204,7 @@ def bubble_cover(start: str, end: str) -> Dict[str, Any]:
                 {"type": "text", "text": f"{start}-{end}", "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
                 {"type": "button", "style": "link", "height": "sm",
-                 "action": {"type": "uri", "label": "開啟報表",
-                             "uri": "https://docs.google.com/spreadsheets/d/1Nttc45OMeYl5SysfxWJ0B5qUu9Bo42Hx/edit?usp=drive_link&ouid=104418630202835382297&rtpof=true&sd=true"}},
+                 "action": {"type": "uri", "label": "開啟報表", "uri": WEEKLY_SHEET_URL}},
                 {
                     "type": "box",
                     "layout": "horizontal",
@@ -200,7 +221,7 @@ def bubble_cover(start: str, end: str) -> Dict[str, Any]:
 
 
 def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: str) -> Dict[str, Any]:
-    subtitle = f"昨日({ymd_yesterday})" if title == "全航線摘要統計" else f"昨日({ymd_yesterday})摘要統計"
+    subtitle = f"昨日({ymd_yesterday})" if title == "各航線摘要統計" else f"昨日({ymd_yesterday})摘要統計"
     return {
         "type": "bubble",
         "size": "mega",
@@ -304,6 +325,11 @@ def build_daily_flex_message() -> FlexSendMessage:
     return flex_daily_payload(data)
 
 # =========================
+# 健康檢查（Cloud Run 健檢用）
+@app.get("/healthz")
+def healthz():
+    return "ok", 200
+
 # LINE Webhook
 # =========================
 @app.route("/callback", methods=["POST"])
