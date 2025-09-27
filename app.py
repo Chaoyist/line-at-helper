@@ -40,15 +40,6 @@ def now_tw() -> datetime.datetime:
         return datetime.datetime.now()
 
 
-def date_pack_for_ui() -> Dict[str, str]:
-    """提供 UI 會用到的日期字串：start/end/yesterday/today。"""
-    today = now_tw()
-    return {
-        "today": today.strftime("%Y/%m/%d"),
-        "yesterday": (today - datetime.timedelta(days=1)).strftime("%Y/%m/%d"),
-        "start7": (today - datetime.timedelta(days=7)).strftime("%Y/%m/%d"),  # 不含今天共 7 天
-    }
-
 
 # --- 1~5分鐘快取設定 ---
 CACHE_TTL_SECONDS = int(os.getenv("GVIZ_CACHE_TTL", "300"))  # 預設 300s，可用環境變數覆寫
@@ -449,19 +440,27 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
     return FlexSendMessage(alt_text="國內線當日運量統計", contents={"type": "carousel", "contents": bubbles})
 
 # =========================
-# Builder：把抽取與渲染串起來
+# Builder：統一流程（讀 CSV → 抽取 → 渲染）
 # =========================
 
+def build_flex_from_csv(csv_url: str, extractor, renderer) -> FlexSendMessage:
+    """共用產生流程：讀取 CSV → 用 extractor 取值 → 用 renderer 產生 Flex。
+    - extractor(rows) 需回傳 dict
+    - renderer(data) 需回傳 FlexSendMessage
+    """
+    rows = fetch_gviz_csv(csv_url)
+    data = extractor(rows)
+    return renderer(data)
+
+
 def build_weekly_flex_message() -> FlexSendMessage:
-    rows = fetch_gviz_csv(WEEKLY_CSV_URL)
-    data = extract_weekly(rows)          # 直接以 A1 座標抽取（含 CG2 日期區間）
-    return flex_weekly_payload(data)
+    """7日內國內線統計表：統一由共用流程產生"""
+    return build_flex_from_csv(WEEKLY_CSV_URL, extract_weekly, flex_weekly_payload)
 
 
 def build_daily_flex_message() -> FlexSendMessage:
-    rows = fetch_gviz_csv(DAILY_CSV_URL)
-    data = extract_daily(rows)
-    return flex_daily_payload(data)
+    """國內線當日運量統計：統一由共用流程產生"""
+    return build_flex_from_csv(DAILY_CSV_URL, extract_daily, flex_daily_payload)
 
 # =========================
 # Flask 路由
