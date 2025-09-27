@@ -301,6 +301,7 @@ def bubble_route(title: str, ymd_yesterday: str, cp: str, cq: str, cr: str, cs: 
                 {"type": "text", "text": title, "weight": "bold", "size": "lg"},
                 {"type": "text", "text": subtitle, "size": "sm", "color": "#888888"},
                 {"type": "separator", "margin": "md"},
+                {"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": DAILY_SHEET_URL}},
                 {"type": "box", "layout": "vertical", "spacing": "sm", "margin": "md", "contents": [
                     {"type": "text", "text": f"✈️ 架次：{cp}", "size": "md", "weight": "bold", "wrap": True},
                     {"type": "text", "text": f"💺 座位數：{cq}", "size": "md", "weight": "bold", "wrap": True},
@@ -374,6 +375,10 @@ def flex_daily_payload(data: Dict[str, Any]) -> FlexSendMessage:
             ]
         }
     }
+
+    # 在總覽卡的數字區域下面加分隔線與開啟報表按鈕
+    bubble_overview['body']['contents'].append({"type": "separator", "margin": "md"})
+    bubble_overview['body']['contents'].append({"type": "button", "style": "link", "height": "sm", "action": {"type": "uri", "label": "開啟報表", "uri": DAILY_SHEET_URL}})
 
     bubbles = [bubble_overview]
 
